@@ -63,8 +63,8 @@ load_module /usr/lib/nginx/modules/ngx_http_alpaca_module.so;
 
 The argument for the `alpaca_dist_*` directives can be one of the following:
 - A known distribution with its parameters from the list below:
-  - `LogNormal/mean,variance`
-  - `Normal/mean,variance`
+  - `LogNormal/mean,std_dev`
+  - `Normal/mean,std_dev`
   - `Exp/lambda`
   - `Poisson/lambda`
   - `Binomial/n,p`
