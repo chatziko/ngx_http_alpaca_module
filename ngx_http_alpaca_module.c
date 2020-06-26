@@ -143,7 +143,7 @@ static ngx_http_output_header_filter_pt ngx_http_next_header_filter;
 static ngx_http_output_body_filter_pt ngx_http_next_body_filter;
 
 static ngx_int_t is_fake_image(ngx_http_request_t* r) {
-	return ngx_strncmp(r->uri.data, "/__alpaca_fake_image.png", 24) == 0;
+	return r->uri.data && ngx_strncmp(r->uri.data, "/__alpaca_fake_image.png", 24) == 0;
 }
 
 static ngx_int_t is_html(ngx_http_request_t* r) {
