@@ -124,6 +124,11 @@ server {
         proxy_pass http://www.upstream.com/;
         proxy_set_header Accept-Encoding "";
     }
+
+    # Just to avoid nginx's warking about not finding the fake image
+    location /__alpaca_fake_image.png {
+      return 200;
+    }
 }
 ```
 
