@@ -67,33 +67,36 @@ pub fn create_css_node(css_text : &str) -> NodeRef {
 	elem_node
 }
 
-pub fn css_parse_background_image(css_text : &str) -> String{
+pub fn css_parse_all_images(css_text : &str) -> Vec<String>{
 
-	let mut path = String::new();
+	let mut images_paths : Vec<String> = Vec::new();
 
-	if css_text.contains("background-image:"){
+	if css_text.contains("url"){
 		let spl_val : Vec<&str> = css_text.split("\n").collect();
 
 		for item in spl_val {
+
 			let mut new_it = remove_whitespace(&item);
-			if new_it.contains("background-image") {
+			// println!("{}", new_it);
+
+			if new_it.contains("url") {
 				new_it = new_it.replace("\'", "\"");
-				let spl = new_it.split("\"");
+				let spl = new_it.split("url");
 				let mut found = false;
 				for it in spl {
+					// println!("{}" , it);
 					if found == true {
-						path = it.to_string().clone();
+						let path = it.replace("\"", "").replace("(", "").replace(")", "").replace(")", "").replace(";", "");
+						images_paths.push(path);
 						break;
 					}
-					if it.contains("background-image:") {
-						found = true;
-					}
+					found = true;
 				}
 			}
 		}
 	}
 
-	return path;
+	return images_paths;
 }
 
 pub fn copy_file_to_string(fname : &str) -> Result<String, std::io::Error> {
@@ -234,30 +237,35 @@ pub fn parse_objects(document: &NodeRef, root: &str, uri: &str, alias: usize) ->
 
 		let node = node_data.as_node();
 
-		let kind = ObjectKind::CSS;
-
 		let last_child = node_data.as_node().last_child().unwrap();
 		let refc = last_child.into_text_ref().unwrap();
 		let refc_val = refc.borrow();
 
-		let path = css_parse_background_image(&refc_val);
+		let images_paths = css_parse_all_images(&refc_val);
 
-		println!("{}",path);
 
-		let split: Vec<&str> = path.split('?').collect();
-		let relative = split[0];
+		for path in images_paths {
+
+			// println!("{}",path);
+
+			let kind = ObjectKind::CSS;
+
+			let split: Vec<&str> = path.split('?').collect();
+			let relative = split[0];
+			
+			let fullpath;
+			match uri_to_abs_fs_path(root, relative, uri, alias) {
+				Some(absolute) => fullpath = absolute,
+				None => continue
+			}
+
+			match aux::stringify_error(fs::read(&fullpath)) {
+				Ok(data) => objects.push(Object::existing(&data, kind, path, node)),
+				Err(e) => { eprint!("libalpaca: cannot read {} ({})\n", fullpath, e); continue },
+			}
+
+		}
 		
-		let fullpath;
-		match uri_to_abs_fs_path(root, relative, uri, alias) {
-			Some(absolute) => fullpath = absolute,
-			None => continue
-		}
-
-		match aux::stringify_error(fs::read(&fullpath)) {
-			Ok(data) => objects.push(Object::existing(&data, kind, path, node)),
-			Err(e) => { eprint!("libalpaca: cannot read {} ({})\n", fullpath, e); continue },
-		}
-
 	}
 
 	// If no favicon was found, insert an empty one
