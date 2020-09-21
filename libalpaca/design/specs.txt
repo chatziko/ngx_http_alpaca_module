@@ -1,0 +1,117 @@
+
+                                   ALPaCA
+
+                             Giovanni Cherubin
+                                Jamie Hayes
+                                Marc Juarez
+                                Noah Vesely
+
+ALPaCA is an application-level server-side Website Fingerprinting (WF) defense.
+This document describes ALPaCA, and speficies the API of libalpaca and how it
+can be used by web server modules.
+
+0. Preliminaries
+
+      The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+      "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and "OPTIONAL" in this
+      document are to be interpreted as described in RFC 2119.
+
+1. Overview
+   libalpaca is primarily thought to called from a web server module (e.g.,
+   `nginx`, `Apache`). It MAY be used from a different web framework (e.g.,
+   Python `flask`), although this may require custom adaptations.
+   
+   We will call "Module" the software handling web requests and calling
+   libalpaca on them. In the case of nginx, ALPaCA can be implemented as a body
+   filter module.
+
+1.1 API Overview
+
+   libalpaca exposes the following function:
+
+     unsigned char *morph_object(unsigned char *object, char *request)
+
+   This function takes as input an object (e.g., HTML page, CSS, image) and the
+   respective client request, and, with respect to the object type, performs
+   the following:
+
+    -  If the object is NOT HTML: it reads the HTTP GET parameter
+       `alpaca-padding` from the request, pads the object to the size specified
+       by such parameter by appropriately appending random data, and returns
+       the padded object.
+    -  If the object is HTML: it parses the object's content, determines the
+       size of the objects referenced by its URLs, samples from a distribution
+       a new size for each of them (with the possibility of inserting new
+       "padding" objects), appends such sizes as a parameter for the objects'
+       URLs in the body (e.g., "/img.png" may become
+       "/img.png?alpaca-padding=300"), and returns the HTML page.
+
+2. libalpaca
+
+   This section describes the internals of the library.
+   
+2.1 Preliminaries
+
+    We define the following object types.
+
+       ALPACA_TYPE
+       HTML_TYPE
+       CSS_TYPE
+       BINARY_TYPE
+       UNKNOWN_TYPE
+    
+    Probability distributions and configuration files will be stored in:
+        
+       ALPACA_PATH = ?
+
+    For internal signalling within the library, the server should store an
+    empty file at the following location:
+      
+       ALPACA_PAD_PATH = /alpaca.pad
+
+2.2 Protocol Overview
+
+    This section gives a high level overview of the protocol.
+
+2.3 Objects' Padding
+
+    This section describes how objects are padded.
+
+2.3.1 Randomness Source
+
+    Can we use a fixed uniformly sampled string, or would this expose the
+    server to padding-related attacks?
+
+2.3.2 HTML_TYPE
+
+2.3.3 CSS_TYPE
+
+2.3.4 IMG_TYPE
+
+2.3.5 BINARY_TYPE, UNKNOWN_TYPE
+
+2.4 Page Sampling
+
+    How a target page is sampled from a distribution.
+
+2.5 Morphing Algorithm
+
+3. Deployment Considerations
+
+3.1 Content
+
+   All content should be self-hosted.
+
+3.2 JavaScript
+
+   JavaScript SHOULD be disabled.
+
+3.3 iframes
+
+3.4 TTL of objects
+
+   Objects MUST NOT be cached by the browser (check).
+
+4. Security Concerns
+
+[0] https://www.nginx.com/resources/wiki/extending/examples/body_filter
