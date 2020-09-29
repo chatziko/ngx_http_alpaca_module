@@ -35,6 +35,9 @@ pub struct MorphInfo {
     obj_num: usize,
     obj_size: usize,
     max_obj_size: usize,
+
+    //for object inlining
+    inlining_obj_num: usize,
 }
 
 
