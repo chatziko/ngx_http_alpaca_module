@@ -574,6 +574,18 @@ static char* ngx_http_alpaca_merge_loc_conf(ngx_conf_t* cf, void* parent,
 		}
 	}
 
+	if (conf->obj_inlining_enabled){
+		if (conf->obj_inlining_num <= 0) {
+			ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
+							   "You can't provide non-positive values or no "
+							   "values at all for ALPaCA object inlining.");
+			return NGX_CONF_ERROR;
+		}
+	}
+	else {
+		conf->obj_inlining_num = 0;
+	}
+
 	return NGX_CONF_OK;
 }
 

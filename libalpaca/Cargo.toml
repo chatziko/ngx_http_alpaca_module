@@ -16,6 +16,8 @@ rand = "0.7"
 rand_distr = "0.2.1"
 html5ever = "0.25.1"
 kuchiki = "0.8.0"
+image = "0.23.10"
+base64 = "0.12.3"
 
 [profile.dev]     # for cargo build (without --release)
 debug = true      # include debug symbols

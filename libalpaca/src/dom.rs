@@ -367,7 +367,7 @@ pub fn create_element(name: &str) -> NodeRef {
     NodeRef::new_element(qual_name, Vec::new())
 }
 
-fn node_get_attribute(node: &NodeRef, name: &str) -> Option<String> {
+pub fn node_get_attribute(node: &NodeRef, name: &str) -> Option<String> {
     match node.as_element() {
         Some(element) => {
             match element.attributes.borrow().get(name) {

@@ -3,10 +3,16 @@ use std::ffi::CStr;
 use pad::{get_html_padding, get_object_padding};
 use dom;
 use pad;
-use dom::{Object,ObjectKind};
+use dom::{Object,ObjectKind,node_get_attribute};
 use distribution::{Dist, sample_ge, sample_pair_ge, sample_ge_many};
 use deterministic::*;
 use aux::stringify_error;
+use image;
+use base64;
+
+// use image::gif::{GifDecoder, GifEncoder};
+// use image::{ImageDecoder, AnimationDecoder};
+// use std::fs::File;
 
 
 use kuchiki::NodeRef;
@@ -40,7 +46,66 @@ pub struct MorphInfo {
     inlining_obj_num: usize,
 }
 
+fn get_file_extension(file_name : &String) -> String{
+    let mut split: Vec<&str> = file_name.split(".").collect();
+    split.pop().unwrap().to_owned()
+}
 
+fn get_img_format_and_ext(file_full_path : &String , file_name : &String) -> String {
+    
+    let base_img = image::open(file_full_path).unwrap();
+
+    let mut buf = Vec::new();
+
+    let extent = get_file_extension(&file_name);
+
+    let img_format : image::ImageOutputFormat;
+    let ext : String;
+    match extent.as_str() {
+        "jpg" | "jpeg" => {
+            img_format = image::ImageOutputFormat::Jpeg(76);
+            ext = String::from("jpeg");
+        },
+        "png" => {
+            img_format = image::ImageOutputFormat::Png;
+            ext = String::from("png");
+        }
+        // "gif" => {
+
+
+        //     img_format = image::ImageOutputFormat::Gif;
+        //     ext = String::from("gif");
+        //     let mut gif_final = String::new();
+
+        //     let file_in = File::open(file_full_path).unwrap();
+        //     let mut decoder = GifDecoder::new(file_in).unwrap();
+        //     let frames = decoder.into_frames();
+        //     let frames = frames.collect_frames().expect("error decoding gif");
+
+        //     for frame in frames {
+        //         let gf = image::DynamicImage::ImageRgba8(frame.into_buffer());
+        //         base_img.write_to(&mut buf, img_format.clone()).unwrap();
+        //         let res_base64 = base64::encode_config(&buf , base64::STANDARD_NO_PAD);
+        //         gif_final = format!("{}{}",gif_final,res_base64);
+        //     }
+
+        //     let temp = format!("data:image/{};charset=utf-8;base64,{}",ext,gif_final);
+    
+        //     return temp;
+
+           
+        // }
+        _ => panic!("uknown image type"),
+    }; 
+
+
+    base_img.write_to(&mut buf, img_format).unwrap();
+    let res_base64 = base64::encode(&buf);
+
+    let temp = format!("data:image/{};charset=utf-8;base64,{}",ext,res_base64);
+    
+    temp
+}
 
 /// It samples a new page using probabilistic morphing, changes the
 /// references to its objects accordingly, and pads it.
@@ -69,7 +134,7 @@ pub extern "C" fn morph_html(pinfo: *mut MorphInfo) -> u8 {
     let full_root = String::from(root).replace("$http_host", http_host);
 
     let mut objects = dom::parse_objects(&document, full_root.as_str(), uri, info.alias); // Vector of objects found in the html.
-    let orig_n = objects.len(); // Number of original objects.
+    let mut orig_n = objects.len(); // Number of original objects.
 
     println!("OBJ NUM {}" , orig_n);
 
@@ -87,6 +152,23 @@ pub extern "C" fn morph_html(pinfo: *mut MorphInfo) -> u8 {
     };
 
     // insert refs and add padding
+    if info.inlining_obj_num > orig_n {
+        info.inlining_obj_num = orig_n;
+    }
+    match make_objects_inlined(&mut objects, full_root.as_str() , info.inlining_obj_num) {
+        Ok(_) => {
+            orig_n = orig_n - info.inlining_obj_num;
+        },
+        Err(e) => {
+            eprint!("libalpaca: insert_objects_refs failed: {}\n", e);
+            return document_to_c(&document, info);
+        }
+    }
+
+    println!("NEW OBJ NUM {}" , orig_n);
+
+
+    // insert refs and add padding
     match insert_objects_refs(&document, &objects, orig_n) {
         Ok(_) => {},
         Err(e) => {
@@ -99,6 +181,76 @@ pub extern "C" fn morph_html(pinfo: *mut MorphInfo) -> u8 {
     get_html_padding(&mut content, target_size); // Pad the html to the target size.
 
     return content_to_c(content, info);
+}
+
+/// Inserts the ALPaCA GET parameters to the html objects, and adds the fake objects to the html.
+fn make_objects_inlined(objects: &mut Vec<Object>, root: &str , n: usize) -> Result<(), String> {
+
+    let obj_for_inlining = &objects[0..n]; // Slice which contains initial objects
+    let mut objects_inlined = Vec::new();
+    // let rest_obj = &objects[n..]; // Slice which contains ALPaCA objects
+
+    for (i,object) in obj_for_inlining.iter().enumerate() {
+        // ignore objects without target size
+        if !object.target_size.is_none() {
+
+            println!("{}",object.uri);
+
+            let node = object.node.as_ref().unwrap();
+            let attr = match node.as_element().unwrap().name.local.to_lowercase().as_ref() {
+                "img" | "script" => "src",
+                "link" => "href",
+                "style" => "style",
+                _ => panic!("shouldn't happen"),
+            };
+
+            let path : String;
+            if attr != "style" {
+                path = match node_get_attribute(node, attr) {
+                    Some(p) if p != "" && !p.starts_with("data:") => p,
+                    _ => continue,
+                };
+            }
+            else {
+                path = object.uri.clone();
+            }
+
+            let temp = format!("{}/{}" , root , path.as_str());
+
+            println!("{}", temp);
+
+            let temp = get_img_format_and_ext(&temp , &object.uri);
+         
+            if attr != "style" {
+
+                dom::node_set_attribute(node, attr, temp);
+
+                objects_inlined.push(i);
+            }
+            else {
+        
+                let last_child = node.last_child().unwrap();
+                let refc = last_child.into_text_ref().unwrap();
+                
+                let mut refc_val = refc.borrow().clone();
+        
+                refc_val = refc_val.replace(&object.uri , &temp);
+
+                // println!("{}", refc_val);
+        
+                *refc.borrow_mut() = refc_val;
+
+                objects_inlined.push(i);
+            }
+        }
+    }
+    
+
+    for _ in objects_inlined.clone() {
+        objects.remove(objects_inlined.pop().unwrap());
+    }
+
+    Ok(())
 }
 
 /// Returns the object's padding.
