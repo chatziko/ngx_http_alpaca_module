@@ -7,8 +7,8 @@ use dom::{Object,ObjectKind,node_get_attribute};
 use distribution::{Dist, sample_ge, sample_pair_ge, sample_ge_many};
 use deterministic::*;
 use aux::stringify_error;
-use image;
 use base64;
+use std::fs;
 
 // use image::gif::{GifDecoder, GifEncoder};
 // use image::{ImageDecoder, AnimationDecoder};
@@ -46,6 +46,10 @@ pub struct MorphInfo {
     inlining_obj_num: usize,
 }
 
+fn keep_local_objects(objects : &mut Vec<Object>){
+    objects.retain(|obj| !obj.uri.contains("http:") && !obj.uri.contains("https:") )
+}
+
 fn get_file_extension(file_name : &String) -> String{
     let mut split: Vec<&str> = file_name.split(".").collect();
     split.pop().unwrap().to_owned()
@@ -53,54 +57,25 @@ fn get_file_extension(file_name : &String) -> String{
 
 fn get_img_format_and_ext(file_full_path : &String , file_name : &String) -> String {
     
-    let base_img = image::open(file_full_path).unwrap();
-
-    let mut buf = Vec::new();
+    let base_img = fs::read(file_full_path).expect("Unable to read file");
 
     let extent = get_file_extension(&file_name);
 
-    let img_format : image::ImageOutputFormat;
     let ext : String;
     match extent.as_str() {
         "jpg" | "jpeg" => {
-            img_format = image::ImageOutputFormat::Jpeg(76);
             ext = String::from("jpeg");
         },
         "png" => {
-            img_format = image::ImageOutputFormat::Png;
             ext = String::from("png");
         }
-        // "gif" => {
-
-
-        //     img_format = image::ImageOutputFormat::Gif;
-        //     ext = String::from("gif");
-        //     let mut gif_final = String::new();
-
-        //     let file_in = File::open(file_full_path).unwrap();
-        //     let mut decoder = GifDecoder::new(file_in).unwrap();
-        //     let frames = decoder.into_frames();
-        //     let frames = frames.collect_frames().expect("error decoding gif");
-
-        //     for frame in frames {
-        //         let gf = image::DynamicImage::ImageRgba8(frame.into_buffer());
-        //         base_img.write_to(&mut buf, img_format.clone()).unwrap();
-        //         let res_base64 = base64::encode_config(&buf , base64::STANDARD_NO_PAD);
-        //         gif_final = format!("{}{}",gif_final,res_base64);
-        //     }
-
-        //     let temp = format!("data:image/{};charset=utf-8;base64,{}",ext,gif_final);
-    
-        //     return temp;
-
-           
-        // }
-        _ => panic!("uknown image type"),
+        "gif" => {
+            ext = String::from("gif");
+        }
+        _ => panic!("unknown image type"),
     }; 
 
-
-    base_img.write_to(&mut buf, img_format).unwrap();
-    let res_base64 = base64::encode(&buf);
+    let res_base64 = base64::encode(&base_img);
 
     let temp = format!("data:image/{};charset=utf-8;base64,{}",ext,res_base64);
     
@@ -134,6 +109,8 @@ pub extern "C" fn morph_html(pinfo: *mut MorphInfo) -> u8 {
     let full_root = String::from(root).replace("$http_host", http_host);
 
     let mut objects = dom::parse_objects(&document, full_root.as_str(), uri, info.alias); // Vector of objects found in the html.
+
+    keep_local_objects(&mut objects);
     let mut orig_n = objects.len(); // Number of original objects.
 
     println!("OBJ NUM {}" , orig_n);
