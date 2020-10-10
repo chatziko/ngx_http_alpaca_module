@@ -1,16 +1,14 @@
 1) change number of objects in each distr
 
-2) image open to File open
+2) font padding
 
-3) font padding
+3) testing
 
-4) testing
+4) Nginx sub-requests
 
-5) Nginx sub-requests
+5) Cached browser results
 
-6) Cached browser results
-
-7) Nginx compression
+6) Nginx compression
 
 
 
