@@ -30,6 +30,7 @@ impl Dist {
             }
             let data = res?;
 
+
             // Construct the 2 vectors containing the values and probabilities
             let mut values: Vec<Vec<usize>> = Vec::new();
             let mut probs: Vec<f64> = Vec::new();

@@ -116,7 +116,7 @@ pub extern "C" fn morph_html(pinfo: *mut MorphInfo) -> u8 {
 
     let target_size = match
         if info.probabilistic != 0 {
-            morph_probabilistic(&document, &mut objects, &info)
+            morph_probabilistic(&document, &mut objects, &info , &mut orig_n)
         } else {
             morph_deterministic(&document, &mut objects, &info , &mut orig_n)
         } {
@@ -252,6 +252,7 @@ fn morph_probabilistic (
     document: &NodeRef,
     objects: &mut Vec<Object>,
     info: &MorphInfo,
+    new_orig_n : &mut usize,
 ) -> Result<usize, String> {
 
     let dist_html_size = Dist::from(c_string_to_str(info.dist_html_size)?)?;
@@ -262,7 +263,7 @@ fn morph_probabilistic (
     let initial_obj_num = objects.len();
 
     // Sample target number of objects (count)
-    let mut target_obj_num = match sample_ge(&dist_obj_num, initial_obj_num) {
+    let target_obj_num = match sample_ge(&dist_obj_num, 0) {
         Ok(c) => c,
         Err(e) => {
             eprint!("libalpaca: could not sample object number ({}), leaving unchanged ({})\n", e, initial_obj_num);
@@ -270,12 +271,27 @@ fn morph_probabilistic (
         }
     };
 
-    // sample target html size
     let content = dom::serialize_html(&document);
-    let min_html_size = content.len()
+
+    let final_obj_num : usize;
+    let min_html_size : usize;
+
+    if target_obj_num < initial_obj_num {
+        final_obj_num = target_obj_num;
+
+        min_html_size = content.len()
+        + 7                                         // for the comment characters
+        + 23 * initial_obj_num;                       // for ?alpaca-padding=...
+    }
+    else {
+        final_obj_num = target_obj_num - initial_obj_num;
+
+        min_html_size = content.len()
         + 7                                         // for the comment characters
         + 23 * initial_obj_num                       // for ?alpaca-padding=...
-        + 94 * (target_obj_num - initial_obj_num);   // for the fake images
+        + 94 * (final_obj_num);   // for the fake images
+    }
+
     let target_html_size;
 
     // find object sizes
@@ -286,7 +302,13 @@ fn morph_probabilistic (
 
         // To more closely match the actual obj_size distribution, we'll sample values for all objects,
         // And then we'll use the largest to pad existing objects and the smallest for padding objects.
-        let mut target_obj_sizes: Vec<usize> = sample_ge_many(&dist_obj_size, 1, target_obj_num)?;
+        let mut target_obj_sizes: Vec<usize>;
+        if target_obj_num < initial_obj_num {
+            target_obj_sizes = sample_ge_many(&dist_obj_size, 1, initial_obj_num)?;
+        }
+        else {
+            target_obj_sizes = sample_ge_many(&dist_obj_size, 1, target_obj_num)?;
+        }
         target_obj_sizes.sort_unstable();       // ascending
 
         // Pad existing objects
@@ -307,10 +329,24 @@ fn morph_probabilistic (
             };
         }
 
-        // create padding objects, using the smallest of the sizes
-        for i in 0..target_obj_num - initial_obj_num {
-            objects.push(Object::fake_image(target_obj_sizes[i]));
+        if target_obj_num < initial_obj_num {
+
+            let root = c_string_to_str(info.root).unwrap();
+            let http_host = c_string_to_str(info.http_host).unwrap();
+            let full_root = String::from(root).replace("$http_host", http_host);
+    
+            //insert refs and add padding
+            make_objects_inlined(objects,  full_root.as_str() , initial_obj_num - target_obj_num).unwrap();
+    
+            *new_orig_n = target_obj_num;
         }
+        else {
+             // create padding objects, using the smallest of the sizes
+            for i in 0..final_obj_num {
+                objects.push(Object::fake_image(target_obj_sizes[i]));
+            }
+        }
+       
 
     } else {
         // Sample the __total__ object size from dist_obj_size.
@@ -335,12 +371,27 @@ fn morph_probabilistic (
         }
 
         // create empty fake images
-        if target_obj_size > 0 && target_obj_num == 0 {
-            // we chose a non-zero target_obj_size but have no objects to pad, create a fake one
-            target_obj_num = 1;
+        // if target_obj_size > 0 && target_obj_num == 0 {
+        //     // we chose a non-zero target_obj_size but have no objects to pad, create a fake one
+        //     target_obj_num = 1;
+        // }
+
+        if target_obj_num < initial_obj_num {
+
+            let root = c_string_to_str(info.root).unwrap();
+            let http_host = c_string_to_str(info.http_host).unwrap();
+            let full_root = String::from(root).replace("$http_host", http_host);
+    
+            //insert refs and add padding
+            make_objects_inlined(objects,  full_root.as_str() , initial_obj_num - target_obj_num).unwrap();
+    
+            *new_orig_n = target_obj_num;
         }
-        for _ in 0..target_obj_num - initial_obj_num {
-            objects.push(Object::fake_image(0));
+        else {
+             // create padding objects, using the smallest of the sizes
+            for _ in 0..final_obj_num {
+                objects.push(Object::fake_image(0));
+            }
         }
 
         // split all extra size equally among all objects
