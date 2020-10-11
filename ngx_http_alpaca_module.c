@@ -28,7 +28,7 @@ struct MorphInfo {
     ngx_uint_t max_obj_size;
 
 	//for object inlining
-	ngx_uint_t inlining_obj_num;
+	// ngx_uint_t inlining_obj_num;
 };
 
 u_char morph_html(struct MorphInfo* info);
@@ -47,7 +47,7 @@ typedef struct {
 	ngx_flag_t use_total_obj_size;
 
 	ngx_flag_t obj_inlining_enabled;
-	ngx_uint_t obj_inlining_num;
+	// ngx_uint_t obj_inlining_num;
 } ngx_http_alpaca_loc_conf_t;
 
 /* Keep a state for each request */
@@ -117,11 +117,6 @@ static ngx_command_t ngx_http_alpaca_commands[] = {
 	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_FLAG,
 	 ngx_conf_set_flag_slot, NGX_HTTP_LOC_CONF_OFFSET,
 	 offsetof(ngx_http_alpaca_loc_conf_t, obj_inlining_enabled), NULL},
-
-	 {ngx_string("alpaca_obj_inlining_num"),
-	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
-	 ngx_conf_set_num_slot, NGX_HTTP_LOC_CONF_OFFSET,
-	 offsetof(ngx_http_alpaca_loc_conf_t, obj_inlining_num), NULL},
 
 	ngx_null_command
 };
@@ -378,7 +373,6 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 					.obj_num = plcf->obj_num,
 					.obj_size = plcf->obj_size,
 					.max_obj_size = plcf->max_obj_size,
-					.inlining_obj_num = plcf->obj_inlining_num,
 				};
 
 				printf("CALLING MORPH\n");
@@ -514,7 +508,6 @@ static void* ngx_http_alpaca_create_loc_conf(ngx_conf_t* cf) {
 	conf->max_obj_size = NGX_CONF_UNSET_UINT;
 	conf->use_total_obj_size = NGX_CONF_UNSET;
 	conf->obj_inlining_enabled = NGX_CONF_UNSET;
-	conf->obj_inlining_num = NGX_CONF_UNSET_UINT;
 
 	return conf;
 }
@@ -534,7 +527,6 @@ static char* ngx_http_alpaca_merge_loc_conf(ngx_conf_t* cf, void* parent,
 	ngx_conf_merge_str_value(conf->dist_obj_size, prev->dist_obj_size, "");
 	ngx_conf_merge_value(conf->use_total_obj_size, prev->use_total_obj_size, 0);
 	ngx_conf_merge_value(conf->obj_inlining_enabled, prev->obj_inlining_enabled, 0);
-	ngx_conf_merge_uint_value(conf->obj_inlining_num, prev->obj_inlining_num, 0);
 
 
 	/* Check if the directives' arguments are properly set */
@@ -551,7 +543,7 @@ static char* ngx_http_alpaca_merge_loc_conf(ngx_conf_t* cf, void* parent,
 	}
 
 	if (conf->deter_enabled) {
-		if ((conf->obj_num <= 0) || (conf->obj_size <= 0) ||
+		if ((conf->obj_size <= 0) ||
 			(conf->max_obj_size <= 0)) {
 			ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
 							   "You can't provide non-positive values or no "
@@ -572,18 +564,6 @@ static char* ngx_http_alpaca_merge_loc_conf(ngx_conf_t* cf, void* parent,
 							   "size for deterministic ALPaCA.");
 			return NGX_CONF_ERROR;
 		}
-	}
-
-	if (conf->obj_inlining_enabled){
-		if (conf->obj_inlining_num <= 0) {
-			ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-							   "You can't provide non-positive values or no "
-							   "values at all for ALPaCA object inlining.");
-			return NGX_CONF_ERROR;
-		}
-	}
-	else {
-		conf->obj_inlining_num = 0;
 	}
 
 	return NGX_CONF_OK;

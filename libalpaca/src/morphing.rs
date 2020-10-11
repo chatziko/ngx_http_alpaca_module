@@ -43,7 +43,7 @@ pub struct MorphInfo {
     max_obj_size: usize,
 
     //for object inlining
-    inlining_obj_num: usize,
+    // inlining_obj_num: usize,
 }
 
 fn keep_local_objects(objects : &mut Vec<Object>){
@@ -111,15 +111,14 @@ pub extern "C" fn morph_html(pinfo: *mut MorphInfo) -> u8 {
     let mut objects = dom::parse_objects(&document, full_root.as_str(), uri, info.alias); // Vector of objects found in the html.
 
     keep_local_objects(&mut objects);
-    let mut orig_n = objects.len(); // Number of original objects.
 
-    println!("OBJ NUM {}" , orig_n);
+    let mut orig_n : usize = objects.len(); // Number of original objects.
 
     let target_size = match
         if info.probabilistic != 0 {
             morph_probabilistic(&document, &mut objects, &info)
         } else {
-            morph_deterministic(&document, &mut objects, &info)
+            morph_deterministic(&document, &mut objects, &info , &mut orig_n)
         } {
         Ok(s) => s,
         Err(e) => {
@@ -128,22 +127,7 @@ pub extern "C" fn morph_html(pinfo: *mut MorphInfo) -> u8 {
         }
     };
 
-    // insert refs and add padding
-    if info.inlining_obj_num > orig_n {
-        info.inlining_obj_num = orig_n;
-    }
-    match make_objects_inlined(&mut objects, full_root.as_str() , info.inlining_obj_num) {
-        Ok(_) => {
-            orig_n = orig_n - info.inlining_obj_num;
-        },
-        Err(e) => {
-            eprint!("libalpaca: insert_objects_refs failed: {}\n", e);
-            return document_to_c(&document, info);
-        }
-    }
-
     println!("NEW OBJ NUM {}" , orig_n);
-
 
     // insert refs and add padding
     match insert_objects_refs(&document, &objects, orig_n) {
@@ -375,7 +359,9 @@ fn morph_deterministic(
     document: &NodeRef,
     objects: &mut Vec<Object>,
     info: &MorphInfo,
+    new_orig_n : &mut usize,
 ) -> Result<usize, String> {
+
     // we'll have at least as many objects as the original ones
     let initial_obj_no = objects.len();
 
@@ -383,7 +369,8 @@ fn morph_deterministic(
     // objects. Count is a multiple of "obj_num" and bigger than "min_count".
     // Target size for each objects is a multiple of "obj_size" and bigger
     // than the object's  original size.
-    let target_count = get_multiple(info.obj_num, initial_obj_no);
+    // let target_count = get_multiple(info.obj_num, initial_obj_no);
+    let target_count = info.obj_num;
 
     for i in 0..objects.len() {
         let min_size = objects[i].content.len()
@@ -393,15 +380,32 @@ fn morph_deterministic(
         objects[i].target_size = Some(obj_target_size);
     }
 
-    let fake_objects_count = target_count - initial_obj_no; // The number of fake objects.
+    if target_count < initial_obj_no {
 
-    // To get the target size of each fake object, sample uniformly a multiple
-    // of "obj_size" which is smaller than "max_obj_size".
-    let fake_objects_sizes = get_multiples_in_range(info.obj_size, info.max_obj_size, fake_objects_count)?;
+        let root = c_string_to_str(info.root).unwrap();
+        let http_host = c_string_to_str(info.http_host).unwrap();
+        let full_root = String::from(root).replace("$http_host", http_host);
 
-    // Add the fake objects to the vector.
-    for i in 0..fake_objects_count {
-        objects.push(Object::fake_image(fake_objects_sizes[i]));
+
+        //insert refs and add padding
+        make_objects_inlined(objects,  full_root.as_str() , initial_obj_no - target_count).unwrap();
+
+        *new_orig_n = target_count;
+    }
+    else {
+
+        let fake_objects_sizes : Vec<usize>;
+
+        let fake_objects_count = target_count - initial_obj_no; // The number of fake objects.
+
+        // To get the target size of each fake object, sample uniformly a multiple
+        // of "obj_size" which is smaller than "max_obj_size".
+        fake_objects_sizes = get_multiples_in_range(info.obj_size, info.max_obj_size, fake_objects_count)?;
+
+        // Add the fake objects to the vector.
+        for i in 0..fake_objects_count {
+            objects.push(Object::fake_image(fake_objects_sizes[i]));
+        }
     }
 
     // find target size,a multiple of "obj_size".
