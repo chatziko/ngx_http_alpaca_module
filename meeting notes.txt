@@ -1,4 +1,4 @@
-1) change number of objects in each distr
+1) change number of objects in each distr -> DONE
 
 2) font padding
 
@@ -8,7 +8,7 @@
 
 5) Cached browser results
 
-6) Nginx compression
+6) Nginx compression (use gzip on , gunzip on in nginx config) -> DONE
 
 
 
