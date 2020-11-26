@@ -28,7 +28,7 @@ struct MorphInfo {
     ngx_uint_t max_obj_size;
 
 	//for object inlining
-	// ngx_uint_t inlining_obj_num;
+	ngx_uint_t obj_inlining_enabled;
 };
 
 u_char morph_html(struct MorphInfo* info);
@@ -373,6 +373,8 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 					.obj_num = plcf->obj_num,
 					.obj_size = plcf->obj_size,
 					.max_obj_size = plcf->max_obj_size,
+
+					.obj_inlining_enabled = plcf->obj_inlining_enabled,
 				};
 
 				printf("CALLING MORPH\n");

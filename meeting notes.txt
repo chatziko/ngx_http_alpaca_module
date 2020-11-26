@@ -2,7 +2,7 @@
 
 2) font padding
 
-3) testing
+3) testing(nginx -h)
 
 4) Nginx sub-requests
 
