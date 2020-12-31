@@ -42,6 +42,7 @@ pub fn min_obj_padding(obj: &Object) -> usize {
 pub fn get_object_padding(kind: ObjectKind, size: usize, target_size: usize) -> Vec<u8> {
     let pad_len = target_size - size;
     let padding;
+
     match kind {
         ObjectKind::CSS | ObjectKind::JS => {
             if size + 4 > target_size {
@@ -74,8 +75,10 @@ fn add_random_chars(pad: &mut Vec<u8>, pad_len: usize) {
 fn get_binary_padding(pad_len: usize) -> Vec<u8> {
     let mut rng = thread_rng();
     let mut pad: Vec<u8> = Vec::with_capacity(pad_len);
+    // let p : u8 = 255;
     for _ in 0..pad_len {
         pad.push(rng.gen::<u8>());
     }
+
     pad
 }

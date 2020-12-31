@@ -56,7 +56,7 @@ fn get_file_extension(file_name : &String) -> String{
 }
 
 fn get_img_format_and_ext(file_full_path : &String , file_name : &String) -> String {
-    
+
     let base_img = fs::read(file_full_path).expect("Unable to read file");
 
     let extent = get_file_extension(&file_name);
@@ -73,12 +73,12 @@ fn get_img_format_and_ext(file_full_path : &String , file_name : &String) -> Str
             ext = String::from("gif");
         }
         _ => panic!("unknown image type"),
-    }; 
+    };
 
     let res_base64 = base64::encode(&base_img);
 
     let temp = format!("data:image/{};charset=utf-8;base64,{}",ext,res_base64);
-    
+
     temp
 }
 
@@ -87,7 +87,7 @@ fn get_img_format_and_ext(file_full_path : &String , file_name : &String) -> Str
 #[no_mangle]
 pub extern "C" fn morph_html(pinfo: *mut MorphInfo) -> u8 {
 
-    
+
     std::env::set_var("RUST_BACKTRACE", "full");
     let info = unsafe { &mut *pinfo };
 
@@ -158,6 +158,7 @@ pub extern "C" fn morph_html(pinfo: *mut MorphInfo) -> u8 {
 /// Inserts the ALPaCA GET parameters to the html objects, and adds the fake objects to the html.
 fn make_objects_inlined(objects: &mut Vec<Object>, root: &str , n: usize) -> Result<(), String> {
 
+
     let obj_for_inlining = &objects[0..n]; // Slice which contains initial objects
     let mut objects_inlined = Vec::new();
     // let rest_obj = &objects[n..]; // Slice which contains ALPaCA objects
@@ -195,7 +196,7 @@ fn make_objects_inlined(objects: &mut Vec<Object>, root: &str , n: usize) -> Res
         println!("{}", temp);
 
         let temp = get_img_format_and_ext(&temp , &object.uri);
-        
+
         if attr != "style" {
 
             dom::node_set_attribute(node, attr, temp);
@@ -203,22 +204,22 @@ fn make_objects_inlined(objects: &mut Vec<Object>, root: &str , n: usize) -> Res
             objects_inlined.push(i);
         }
         else {
-    
+
             let last_child = node.last_child().unwrap();
             let refc = last_child.into_text_ref().unwrap();
-            
+
             let mut refc_val = refc.borrow().clone();
-    
+
             refc_val = refc_val.replace(&object.uri , &temp);
 
             // println!("{}", refc_val);
-    
+
             *refc.borrow_mut() = refc_val;
 
             objects_inlined.push(i);
         }
     }
-    
+
 
     for _ in objects_inlined.clone() {
         objects.remove(objects_inlined.pop().unwrap());
@@ -241,7 +242,7 @@ pub extern "C" fn morph_object(pinfo: *mut MorphInfo) -> u8 {
     let target_size = dom::parse_target_size(query);
     if (target_size == 0) || (target_size <= info.size) {
         // Target size has to be greater than current size.
-        eprint!("alpaca: morph_object: target_size ({}) cannot match current size ({})\n", target_size, info.size);
+        print!("alpaca: morph_object: target_size ({}) cannot match current size ({})\n", target_size, info.size);
         return content_to_c(Vec::new(), info);
     }
 
@@ -261,12 +262,12 @@ pub extern "C" fn free_memory(data: *mut u8, size: usize) {
     }
 }
 
-fn morph_probabilistic_with_inl (
+fn morph_probabilistic_with_inl(
     document: &NodeRef,
     objects: &mut Vec<Object>,
     info: &MorphInfo,
     new_orig_n : &mut usize,
-) -> Result<usize, String> {
+) -> Result<usize , String> {
 
     let dist_html_size = Dist::from(c_string_to_str(info.dist_html_size)?)?;
     let dist_obj_num = Dist::from(c_string_to_str(info.dist_obj_num)?)?;
@@ -346,10 +347,10 @@ fn morph_probabilistic_with_inl (
             let root = c_string_to_str(info.root).unwrap();
             let http_host = c_string_to_str(info.http_host).unwrap();
             let full_root = String::from(root).replace("$http_host", http_host);
-    
+
             //insert refs and add padding
             make_objects_inlined(objects,  full_root.as_str() , initial_obj_num - target_obj_num).unwrap();
-    
+
             *new_orig_n = target_obj_num;
         }
         else {
@@ -358,7 +359,7 @@ fn morph_probabilistic_with_inl (
                 objects.push(Object::fake_image(target_obj_sizes[i]));
             }
         }
-       
+
 
     } else {
         // Sample the __total__ object size from dist_obj_size.
@@ -393,10 +394,10 @@ fn morph_probabilistic_with_inl (
             let root = c_string_to_str(info.root).unwrap();
             let http_host = c_string_to_str(info.http_host).unwrap();
             let full_root = String::from(root).replace("$http_host", http_host);
-    
+
             //insert refs and add padding
             make_objects_inlined(objects,  full_root.as_str() , initial_obj_num - target_obj_num).unwrap();
-    
+
             *new_orig_n = target_obj_num;
         }
         else {
@@ -448,7 +449,6 @@ fn morph_deterministic_with_inl(
         let root = c_string_to_str(info.root).unwrap();
         let http_host = c_string_to_str(info.http_host).unwrap();
         let full_root = String::from(root).replace("$http_host", http_host);
-
 
         //insert refs and add padding
         make_objects_inlined(objects,  full_root.as_str() , initial_obj_no - target_count).unwrap();
@@ -670,7 +670,7 @@ fn append_ref(object: &Object) {
 
         let last_child = node.last_child().unwrap();
         let refc = last_child.into_text_ref().unwrap();
-        
+
         let mut refc_val = refc.borrow().clone();
 
         refc_val = refc_val.replace(&object.uri , &new_link);

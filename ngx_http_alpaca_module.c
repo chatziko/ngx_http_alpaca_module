@@ -164,11 +164,19 @@ static ngx_int_t is_html(ngx_http_request_t* r) {
 }
 
 static ngx_int_t is_paddable(ngx_http_request_t* r) {
-	return 
+
+	// printf("%s\n",r->uri.data);
+	if(strstr((const char*)r->uri.data, ".png?alpaca-padding=") != NULL) {
+		r->headers_out.content_type.data = (u_char*)"image/png";
+		r->headers_out.content_type.len = 9;
+		r->headers_out.content_type_len = 9;
+	}
+	return
 		   (r->headers_out.content_type.len >= 6 &&
 		   ngx_strncmp(r->headers_out.content_type.data, "image/", 6) == 0) ||
 		   ngx_strncmp(r->headers_out.content_type.data, "application/javascript", r->headers_out.content_type.len) == 0 ||
 		   ngx_strncmp(r->headers_out.content_type.data, "text/css", r->headers_out.content_type.len) == 0;
+		//    || ngx_strncmp(r->headers_out.content_type.data, "text/plain", r->headers_out.content_type.len) == 0;
 }
 
 static ngx_int_t ngx_http_alpaca_header_filter(ngx_http_request_t* r) {
@@ -273,6 +281,9 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 	/* If the fake alpaca image is requested, change some metadata and pad it.
 	 */
 	if (is_fake_image(r)) {
+
+		printf("FAKE IMAGE INBOUND\n");
+
 		/* Proceed only if there is an ALPaCA GET parameter. */
 		if (r->args.len == 0) {
 			return ngx_http_next_body_filter(r, in);
@@ -281,6 +292,7 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 		r->headers_out.status = 200;
 		r->headers_out.content_type.data = (u_char*)"image/png";
 		r->headers_out.content_type_len = 9;
+
 
 		struct MorphInfo info = {
 			.content_type = (u_char*)"image/png",
@@ -293,6 +305,20 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 			// Call the next filter if something went wrong.
 			return ngx_http_next_body_filter(r, in);
 		}
+
+
+		// info.size = 100000;
+
+		// printf("info %ld\n",info.size );
+
+
+		// response = ngx_pcalloc(r->pool, info.size * sizeof(u_char));
+		// ngx_memcpy(response, info.content, info.size);
+		// ngx_pfree(r->pool, ctx->response);
+		// free_memory(info.content, info.size);
+
+		// ctx->size = info.size;
+
 
 		// Copy the fake object and free the memory that was allocated in rust
 		// using the custom "free memory" funtion.
@@ -317,6 +343,7 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 		out.next = NULL;
 
 		return ngx_http_next_body_filter(r, &out);
+
 	}
 
 	/* If the response is an html, wait until the whole body has been captured
@@ -377,7 +404,6 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 					.obj_inlining_enabled = plcf->obj_inlining_enabled,
 				};
 
-				printf("CALLING MORPH\n");
 				// run alpaca
 				if (morph_html(&info)) {
 					/* Copy the morphed html and free the memory that was
@@ -431,6 +457,8 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 
 	} else if (is_paddable(r)) {
 
+		printf("PADDDDAAAABLEEE\n");
+
 		/* Proceed only if there is an ALPaCA GET parameter. */
 		if (r->args.len == 0) {
 			return ngx_http_next_body_filter(r, in);
@@ -452,7 +480,7 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 					.query = copy_ngx_str(r->args, r->pool),
 					.size = ctx->size,
 				};
-					
+
 				if (!morph_object(&info)) {
 					// Call the next filter if something went wrong.
 					return ngx_http_next_body_filter(r, in);
