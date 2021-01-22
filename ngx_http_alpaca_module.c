@@ -165,12 +165,12 @@ static ngx_int_t is_html(ngx_http_request_t* r) {
 
 static ngx_int_t is_paddable(ngx_http_request_t* r) {
 
-	// printf("%s\n",r->uri.data);
-	if(strstr((const char*)r->uri.data, ".png?alpaca-padding=") != NULL) {
-		r->headers_out.content_type.data = (u_char*)"image/png";
-		r->headers_out.content_type.len = 9;
-		r->headers_out.content_type_len = 9;
-	}
+	printf("%s\n",r->uri.data);
+	// if(strstr((const char*)r->uri.data, ".png?alpaca-padding=") != NULL) {
+	// 	r->headers_out.content_type.data = (u_char*)"image/png";
+	// 	r->headers_out.content_type.len = 9;
+	// 	r->headers_out.content_type_len = 9;
+	// }
 	return
 		   (r->headers_out.content_type.len >= 6 &&
 		   ngx_strncmp(r->headers_out.content_type.data, "image/", 6) == 0) ||

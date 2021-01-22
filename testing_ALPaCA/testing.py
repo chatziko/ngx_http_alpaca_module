@@ -5,13 +5,13 @@ from utils            import colors
 from response_handler import get_response_filenames
 
 methods = {
-    # 'deter_simple'      : '/Deterministic/nginx_simple.conf',
+    'deter_simple'      : '/Deterministic/nginx_simple.conf',
     # 'deter_fake_imgs'   : '/Deterministic/nginx_fake_imgs.conf',
     # 'deter_inline_all'  : '/Deterministic/nginx_inline_all.conf',
     # 'deter_inline_some' : '/Deterministic/nginx_inline_some.conf',
 
     # 'prob_simple'       : '/Probabilistic/nginx_simple.conf',
-    'prob_fake_imgs'    : '/Probabilistic/nginx_fake_imgs.conf',
+    # 'prob_fake_imgs'    : '/Probabilistic/nginx_fake_imgs.conf',
     # 'prob_inline_all'   : '/Probabilistic/nginx_inline_all.conf',
     # 'prob_inline_some'  : '/Probabilistic/nginx_inline_some.conf',
 }
@@ -65,11 +65,14 @@ if __name__ == "__main__":
     for conf_name in methods:
         success = True
         run_nginx(methods[conf_name])
+
         url = 'http://localhost:8888'
         resp_files , timed_out = get_response_filenames(url)
+
         if (timed_out):
             print("Connection Timed Out!")
             success = False
+
         else:
             inl_num = 0
             fake_img_num = 0
@@ -89,6 +92,7 @@ if __name__ == "__main__":
                         break
                 except:
                     pass
+
                 # print(resp , status , resource_size , transfer_size)
             if success == True and inl_num != inlines[conf_name]:
                 print("Inlining error in {}. Expected {} inlined objects and received {}.".format(conf_name, inlines[conf_name], inl_num))

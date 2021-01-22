@@ -4,7 +4,7 @@
 
 3) testing(nginx -h) --
 
-4) Nginx sub-requests
+4) Nginx sub-requests (get url from nginx)
 
 5) Cached browser results
 
