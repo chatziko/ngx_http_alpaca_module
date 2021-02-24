@@ -580,18 +580,18 @@ static void* ngx_http_alpaca_create_loc_conf(ngx_conf_t* cf) {
 static char* ngx_http_alpaca_merge_loc_conf(ngx_conf_t* cf, void* parent, void* child) {
 
     ngx_http_alpaca_loc_conf_t* prev = parent;
-	ngx_http_alpaca_loc_conf_t* conf = child;
+    ngx_http_alpaca_loc_conf_t* conf = child;
 
-	ngx_conf_merge_value     (conf->prob_enabled        , prev->prob_enabled        , 0 );
-	ngx_conf_merge_value     (conf->deter_enabled       , prev->deter_enabled       , 0 );
-	ngx_conf_merge_uint_value(conf->obj_num             , prev->obj_num             , 0 );
-	ngx_conf_merge_uint_value(conf->obj_size            , prev->obj_size            , 0 );
-	ngx_conf_merge_uint_value(conf->max_obj_size        , prev->max_obj_size        , 0 );
-	ngx_conf_merge_str_value (conf->dist_html_size      , prev->dist_html_size      , "");
-	ngx_conf_merge_str_value (conf->dist_obj_num        , prev->dist_obj_num        , "");
-	ngx_conf_merge_str_value (conf->dist_obj_size       , prev->dist_obj_size       , "");
-	ngx_conf_merge_value     (conf->use_total_obj_size  , prev->use_total_obj_size  , 0 );
-	ngx_conf_merge_value     (conf->obj_inlining_enabled, prev->obj_inlining_enabled, 0 );
+    ngx_conf_merge_value     (conf->prob_enabled        , prev->prob_enabled        , 0 );
+    ngx_conf_merge_value     (conf->deter_enabled       , prev->deter_enabled       , 0 );
+    ngx_conf_merge_uint_value(conf->obj_num             , prev->obj_num             , 0 );
+    ngx_conf_merge_uint_value(conf->obj_size            , prev->obj_size            , 0 );
+    ngx_conf_merge_uint_value(conf->max_obj_size        , prev->max_obj_size        , 0 );
+    ngx_conf_merge_str_value (conf->dist_html_size      , prev->dist_html_size      , "");
+    ngx_conf_merge_str_value (conf->dist_obj_num        , prev->dist_obj_num        , "");
+    ngx_conf_merge_str_value (conf->dist_obj_size       , prev->dist_obj_size       , "");
+    ngx_conf_merge_value     (conf->use_total_obj_size  , prev->use_total_obj_size  , 0 );
+    ngx_conf_merge_value     (conf->obj_inlining_enabled, prev->obj_inlining_enabled, 0 );
 
 
 	/* Check if the directives' arguments are properly set */
