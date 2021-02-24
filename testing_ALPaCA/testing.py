@@ -74,10 +74,11 @@ if __name__ == "__main__":
             success = False
 
         else:
-            inl_num = 0
+            inl_num      = 0
             fake_img_num = 0
 
             for resp, status, resource_size, transfer_size in resp_files:
+
                 if "data:image" in resp:
                     inl_num += 1
 
@@ -86,6 +87,7 @@ if __name__ == "__main__":
 
                 try:
                     target_size = get_alpaca_target_size(resp)
+
                     if resource_size != target_size:
                         print("Error expected sizes defers from real size (expected: {} | real: {})".format(resource_size , target_size) )
                         success = False
@@ -106,7 +108,6 @@ if __name__ == "__main__":
             elif success == True and fake_img_num not in fake_imgs[conf_name]:
                 print("Fake images error in {}. Expected {} fake images and received {}.".format(conf_name, fake_imgs[conf_name], fake_img_num))
                 success = False
-
 
         print("{:17} : {}".format(conf_name, success_msg[success]))
 

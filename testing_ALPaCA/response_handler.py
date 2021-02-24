@@ -1,4 +1,5 @@
 import json
+
 from selenium.webdriver.chrome.options import Options
 from selenium import webdriver
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
@@ -8,30 +9,34 @@ def process_browser_log_entry(entry):
     return response
 
 def get_response_filenames(url):
-    resp_files = []
+
+    resp_files        = []
     chromedriver_path = "./venv/chromedriver"
-    options = Options()
-    options.headless = True
-    caps = DesiredCapabilities.CHROME
+
+    options           = Options()
+    options.headless  = True
+
+    caps                      = DesiredCapabilities.CHROME
     caps['goog:loggingPrefs'] = {'performance': 'ALL'}
-    driver = webdriver.Chrome(chromedriver_path , desired_capabilities=caps , options=options)
+
+    driver = webdriver.Chrome(chromedriver_path, desired_capabilities=caps, options=options)
     driver.set_page_load_timeout(10)
     driver.delete_all_cookies()
 
     try:
         driver.get(url)
     except:
-        return None , True
+        return None, True
 
     browser_log = driver.get_log('performance')
-    events = [process_browser_log_entry(entry) for entry in browser_log]
+    events      = [ process_browser_log_entry(entry) for entry in browser_log ]
+    data_sizes  = []
 
-    data_sizes = []
-    for event in events :
+    for event in events:
+
         if 'Network.responseReceived' in event['method'] and 'response' in event['params']:
-            resp_files.append([event['params']['response']['url'] , event['params']['response']['statusText'], 0, 0])
-            data_sizes.append(event['params']['requestId'])
-
+            resp_files.append([ event['params']['response']['url'], event['params']['response']['statusText'], 0, 0 ])
+            data_sizes.append(  event['params']['requestId'] )
 
         if 'Network.dataReceived' in event['method'] and 'requestId' in event['params']:
             # print(event['params'])
@@ -47,4 +52,4 @@ def get_response_filenames(url):
                     break
 
     driver.close()
-    return resp_files , False
+    return resp_files, False

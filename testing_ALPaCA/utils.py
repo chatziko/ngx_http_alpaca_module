@@ -26,4 +26,4 @@ class colors:
     WHITE                = '\033[1;37m'
     ORANGE               = '\033[38;5;214m'
     GREENISH             = '\033[38;2;128;209;132m'
-    RESET                = '\033[0m' 
+    RESET                = '\033[0m'
