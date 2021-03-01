@@ -166,6 +166,50 @@ pub fn parse_target_size(query: &str) -> usize {
 	}
 }
 
+/// Parses the objects contained in an HTML page.
+pub fn parse_object_names(document: &NodeRef) -> Vec<String> {
+
+    // Objects vector
+	let mut objects: Vec<String> = Vec::new();
+	let mut found_favicon        = false;
+
+    for node_data in document.select("img,link,script").unwrap() {
+
+        let node = node_data.as_node();
+		let name = node_data.name.local.to_lowercase();
+
+
+		let path_attr = if name == "link" { "href" } else { "src" };
+		let path      = match node_get_attribute(node, path_attr) {
+			Some(p) if p != "" && !p.starts_with("data:") => p       ,
+			_                                             => continue,
+		};
+
+		println!("PATH {}",path);
+
+		let temp = format!( "/{}", path.as_str());
+
+		objects.push(temp);
+
+		let rel  = node_get_attribute(node, "rel").unwrap_or_default();
+		match ( name.as_str(), rel.as_str() ) {
+			("link", "stylesheet")                       => ObjectKind::CSS                          ,
+			("link", "shortcut icon") | ("link", "icon") => { found_favicon = true; ObjectKind::IMG },
+			("script", _)                                => ObjectKind::JS                           ,
+			("img", _)                                   => ObjectKind::IMG                          ,
+			_                                            => continue                                 ,
+		};
+	}
+
+	// If no favicon was found, insert an empty one
+	if !found_favicon {
+		insert_empty_favicon(document);
+	}
+
+    // objects.sort_unstable_by( |a, b| b.content.len().cmp( &a.content.len() ) ); // larger first
+	objects
+}
+
 
 /// Parses the objects contained in an HTML page.
 pub fn parse_objects(document: &NodeRef, root: &str, uri: &str, alias: usize) -> Vec<Object> {

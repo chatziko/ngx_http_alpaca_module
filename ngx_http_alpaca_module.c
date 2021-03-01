@@ -42,6 +42,8 @@ struct MorphInfo {
 
 u_char morph_html  (struct MorphInfo* info);
 u_char morph_object(struct MorphInfo* info);
+u_char** get_html_required_files(struct MorphInfo* info , int* length);
+
 
 void free_memory(u_char* data, ngx_uint_t size);
 
@@ -438,6 +440,9 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 				}
 			}
 
+			u_char** objects = NULL;
+			int length = -1;
+
 			struct MorphInfo info = {
 					.root      = copy_ngx_str(core_plcf->root, r->pool),
 					.uri       = copy_ngx_str(r->uri, r->pool),
@@ -459,6 +464,13 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 					.max_obj_size         = plcf->max_obj_size,
 					.obj_inlining_enabled = plcf->obj_inlining_enabled,
 				};
+
+			objects = get_html_required_files(&info , &length);
+
+			printf("Required files\n");
+			for (int i = 0 ; i < length ; i++){
+				printf("%s %ld\n",objects[i] , strlen((const char *)objects[i]));
+			}
 
 			// Run alpaca
 			if ( morph_html(&info) ) {
@@ -517,8 +529,6 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 		return NGX_OK;
 	}
 	else if (is_paddable(r) && r == r->main) {
-
-		printf("PADDDDAAAABLEEE\n");
 
 		/* Proceed only if there is an ALPaCA GET parameter. */
 		if (r->args.len == 0) {

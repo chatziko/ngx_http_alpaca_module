@@ -10,6 +10,8 @@ use pad::{ get_html_padding, get_object_padding };
 use pad;
 use std::ffi::CStr;
 use std::fs;
+use std::os::raw::{c_char,c_int};
+use std::ffi::CString;
 
 // use image::gif::{GifDecoder, GifEncoder};
 // use image::{ImageDecoder, AnimationDecoder};
@@ -81,6 +83,45 @@ fn get_img_format_and_ext(file_full_path: &String, file_name: &String) -> String
     let temp       = format!("data:image/{};charset=utf-8;base64,{}",ext,res_base64);
 
     temp
+}
+
+#[no_mangle]
+pub extern "C" fn get_html_required_files(pinfo: *mut MorphInfo , length : *mut c_int ) -> *mut *mut c_char{
+    std::env::set_var("RUST_BACKTRACE", "full");
+    let info = unsafe { &mut *pinfo };
+    let uri = c_string_to_str(info.uri).unwrap();
+
+    // /* Convert arguments into &str */
+    let html = match c_string_to_str(info.content) {
+        Ok(s) => s,
+        Err(e) => {
+            eprint!("libalpaca: cannot read html content of {}: {}\n", uri, e);
+            return std::ptr::null_mut();       // return NULL pointer if html cannot be converted to a string
+        }
+    };
+
+    let document = dom::parse_html(html);
+
+    let mut objects = dom::parse_object_names(&document); // Vector of objects found in the html.
+
+    let mut object_uris = vec![];
+    for obj in &mut *objects {
+        object_uris.push( CString::new( format!( "{}",obj.to_owned() ) ).unwrap() );
+    }
+
+    let mut out = object_uris.into_iter().map(|s| s.into_raw()).collect::<Vec<_>>();
+
+    out.shrink_to_fit();
+
+    let len = out.len();
+    let ptr = out.as_mut_ptr();
+    std::mem::forget(out);
+
+    unsafe {
+        std::ptr::write(length, len as c_int);
+    }
+
+    ptr
 }
 
 /// It samples a new page using probabilistic morphing, changes the
