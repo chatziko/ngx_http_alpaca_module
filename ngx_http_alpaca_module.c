@@ -491,13 +491,17 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 			}
 
 			ngx_str_t uri;
-			if (strstr((char *)r->uri.data, "index.html") != NULL || strstr((char *)r->uri.data, "index.php") != NULL){
-				ngx_str_set(&uri , "/");
+			char temp[strlen( (char*)r->uri.data ) + 1];
+			strcpy(temp , (char*)r->uri.data);
+			char * token = strtok(temp, " ");
+			strcpy(temp , token);
+
+			ngx_str_set(&uri , temp);
+
+			if (ngx_http_subrequest(r, &uri , NULL /* args */, &sr, NULL /* cb */, 0 /* flags */) == NGX_ERROR) {
+				printf("NGINX SUB-REQUEST ERROR!\n");
+				return NGX_ERROR;
 			}
-			else {
-				ngx_str_set(&uri , r->uri.data);
-			}
-			ngx_http_subrequest(r, &uri , NULL /* args */, &sr, NULL /* cb */, 0 /* flags */);
 
 			// // Run alpaca
 			// if ( morph_html(&info) ) {
