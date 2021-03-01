@@ -8,6 +8,7 @@ extern crate image;
 extern crate kuchiki;
 extern crate rand;
 extern crate rand_distr;
+extern crate libc;
 
 pub mod aux;
 pub mod deterministic;

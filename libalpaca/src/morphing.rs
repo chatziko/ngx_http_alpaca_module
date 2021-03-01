@@ -10,8 +10,12 @@ use pad::{ get_html_padding, get_object_padding };
 use pad;
 use std::ffi::CStr;
 use std::fs;
-use std::os::raw::{c_char,c_int};
-use std::ffi::CString;
+use std::os::raw::{c_int};
+use std::ffi::{CString};
+use libc;
+
+
+
 
 // use image::gif::{GifDecoder, GifEncoder};
 // use image::{ImageDecoder, AnimationDecoder};
@@ -47,6 +51,39 @@ pub struct MorphInfo {
     //for object inlining
     obj_inlining_enabled : bool     ,
 }
+
+
+#[repr(C)]
+pub struct cell {
+    pub next: *mut cell,
+    pub value: *mut libc::c_void,
+    pub key: *mut libc::c_char,
+}
+
+#[repr(C)]
+pub struct map {
+    pub elems: *mut *mut cell,
+    pub capacity: libc::c_int,
+    pub size: libc::c_int,
+}
+
+#[link(name = "map", kind = "static")]
+
+// extern "C" {
+
+//     fn map_get(m : map, key : *const c_char) -> *mut c_void;
+// }
+
+extern "C" {
+    fn map_get(m: map, key: *const libc::c_char) -> *mut libc::c_void;
+    fn map_create() -> map;
+}
+
+// #[link(name = "badmath", kind = "static")]
+
+// extern "C" {
+//     fn bad_add(v1:f32 , v2:f32) -> f32;
+// }
 
 fn keep_local_objects(objects: &mut Vec<Object>) {
     objects.retain( |obj| !obj.uri.contains("http:") && !obj.uri.contains("https:") )
@@ -86,7 +123,7 @@ fn get_img_format_and_ext(file_full_path: &String, file_name: &String) -> String
 }
 
 #[no_mangle]
-pub extern "C" fn get_html_required_files(pinfo: *mut MorphInfo , length : *mut c_int ) -> *mut *mut c_char{
+pub extern "C" fn get_html_required_files(pinfo: *mut MorphInfo , length : *mut c_int ) -> *mut *mut libc::c_char{
     std::env::set_var("RUST_BACKTRACE", "full");
     let info = unsafe { &mut *pinfo };
     let uri = c_string_to_str(info.uri).unwrap();
@@ -122,6 +159,24 @@ pub extern "C" fn get_html_required_files(pinfo: *mut MorphInfo , length : *mut 
     }
 
     ptr
+}
+
+
+
+#[no_mangle]
+pub extern "C" fn morph_html_from_content(pinfo: *mut MorphInfo , req_mapper : map) -> u8 {
+
+    unsafe { map_create() };
+
+    let st = String::from("/q1.gif");
+    let c_world: *mut libc::c_char = st.as_ptr() as *mut libc::c_char;
+    println!("EEYEYEYY!!!!!!!!!!!!!");
+    let temp = unsafe { map_get(req_mapper, c_world) } as *mut libc::c_char;
+    println!("EEYEYEYY");
+    let temp = unsafe { CStr::from_ptr(temp) };
+    let str_slice: &str = temp.to_str().unwrap();
+    println!("{}",str_slice);
+    0
 }
 
 /// It samples a new page using probabilistic morphing, changes the

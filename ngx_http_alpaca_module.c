@@ -43,6 +43,7 @@ struct MorphInfo {
 u_char morph_html  (struct MorphInfo* info);
 u_char morph_object(struct MorphInfo* info);
 u_char** get_html_required_files(struct MorphInfo* info , int* length);
+u_char morph_html_from_content(struct MorphInfo* info  ,map req_mapper);
 
 
 void free_memory(u_char* data, ngx_uint_t size);
@@ -341,6 +342,7 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
     u_char* response; // Response to be sent from the server
 
 	static map req_mapper = NULL;
+	static struct MorphInfo* main_info = NULL;
 
 	// Call the next filter if neither of the ALPaCA versions have been
 	// activated But always serve the fake image, even if the configuration does
@@ -447,29 +449,29 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 			u_char** objects = NULL;
 			ngx_http_request_t *sr = NULL;
 
-			struct MorphInfo info = {
-					.root      = copy_ngx_str(core_plcf->root, r->pool),
-					.uri       = copy_ngx_str(r->uri, r->pool),
-					.http_host = copy_ngx_str(r->headers_in.host->value, r->pool),
+			main_info = malloc(sizeof(struct MorphInfo));
 
-                    .content   = ctx->response,
-					.size      = ctx->size,
-					.alias     = core_plcf->alias != NGX_MAX_SIZE_T_VALUE ? core_plcf->alias : 0,
+			main_info->root      = copy_ngx_str(core_plcf->root, r->pool),
+			main_info->uri       = copy_ngx_str(r->uri, r->pool),
+			main_info->http_host = copy_ngx_str(r->headers_in.host->value, r->pool),
 
-					.probabilistic = plcf->prob_enabled,
+			main_info->content   = ctx->response,
+			main_info->size      = ctx->size,
+			main_info->alias     = core_plcf->alias != NGX_MAX_SIZE_T_VALUE ? core_plcf->alias : 0,
 
-					.dist_html_size = copy_ngx_str(plcf->dist_html_size, r->pool),
-					.dist_obj_num   = copy_ngx_str(plcf->dist_obj_num, r->pool),
-					.dist_obj_size  = copy_ngx_str(plcf->dist_obj_size, r->pool),
+			main_info->probabilistic = plcf->prob_enabled,
 
-                    .use_total_obj_size   = plcf->use_total_obj_size,
-					.obj_num              = plcf->obj_num,
-					.obj_size             = plcf->obj_size,
-					.max_obj_size         = plcf->max_obj_size,
-					.obj_inlining_enabled = plcf->obj_inlining_enabled,
-				};
+			main_info->dist_html_size = copy_ngx_str(plcf->dist_html_size, r->pool),
+			main_info->dist_obj_num   = copy_ngx_str(plcf->dist_obj_num, r->pool),
+			main_info->dist_obj_size  = copy_ngx_str(plcf->dist_obj_size, r->pool),
 
-			objects = get_html_required_files(&info , &length);
+			main_info->use_total_obj_size   = plcf->use_total_obj_size,
+			main_info->obj_num              = plcf->obj_num,
+			main_info->obj_size             = plcf->obj_size,
+			main_info->max_obj_size         = plcf->max_obj_size,
+			main_info->obj_inlining_enabled = plcf->obj_inlining_enabled,
+
+			objects = get_html_required_files(main_info , &length);
 
 			printf("Required files\n");
 			for (int i = 0 ; i < length ; i++){
@@ -596,6 +598,9 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 				.size         = ctx->size,
 			};
 
+			//Get corresponding content for specific file
+			//And pass it to morph_object
+
 			if ( !morph_object(&info) ) {
 				// Call the next filter if something went wrong.
 				return ngx_http_next_body_filter(r, in);
@@ -639,41 +644,20 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 		if (is_html(r) && r->headers_out.status != 404){
 			if ((response = get_response(ctx , r , in , true)) != NULL){
 
-				struct MorphInfo info = {
-					.root      = copy_ngx_str(core_plcf->root, r->pool),
-					.uri       = copy_ngx_str(r->uri, r->pool),
-					.http_host = copy_ngx_str(r->headers_in.host->value, r->pool),
-
-                    .content   = ctx->response,
-					.size      = ctx->size,
-					.alias     = core_plcf->alias != NGX_MAX_SIZE_T_VALUE ? core_plcf->alias : 0,
-
-					.probabilistic = plcf->prob_enabled,
-
-					.dist_html_size = copy_ngx_str(plcf->dist_html_size, r->pool),
-					.dist_obj_num   = copy_ngx_str(plcf->dist_obj_num, r->pool),
-					.dist_obj_size  = copy_ngx_str(plcf->dist_obj_size, r->pool),
-
-                    .use_total_obj_size   = plcf->use_total_obj_size,
-					.obj_num              = plcf->obj_num,
-					.obj_size             = plcf->obj_size,
-					.max_obj_size         = plcf->max_obj_size,
-					.obj_inlining_enabled = plcf->obj_inlining_enabled,
-				};
-
 				// Run alpaca
-				if ( morph_html(&info) ) {
+				//Give map to morph_html
+				if ( morph_html_from_content(main_info , req_mapper) ) {
 
 					/* Copy the morphed html and free the memory that was
 						* allocated in rust using the custom "free memory" funtion. */
-					response = ngx_pcalloc( r->pool, info.size * sizeof(u_char) );
+					response = ngx_pcalloc( r->pool, main_info->size * sizeof(u_char) );
 
-					ngx_memcpy(response, info.content, info.size);
+					ngx_memcpy(response, main_info->content, main_info->size);
 					ngx_pfree (r->pool, ctx->response);
 
-					free_memory(info.content, info.size);
+					free_memory(main_info->content, main_info->size);
 
-					ctx->size = info.size;
+					ctx->size = main_info->size;
 
 				} else {
 
@@ -715,7 +699,10 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 		}
 		else {
 			if ((response = get_response(ctx , r , in , false)) != NULL){
-
+				u_char* new_resp = malloc(ctx->size);
+				memset(new_resp , 0 , ctx->size);
+				memcpy(new_resp , response , ctx->size);
+				map_set(req_mapper , (char *)r->uri.data, new_resp);
 			}
 		}
 	}
