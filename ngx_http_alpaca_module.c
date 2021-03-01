@@ -493,17 +493,21 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 				response = ctx->response;
 			}
 
-			ngx_http_set_ctx(r, NULL, ngx_http_alpaca_module);
-
+			/* Return the modified response in a new buffer */
 			b = ngx_calloc_buf(r->pool);
+
 			if (b == NULL) {
 				return NGX_ERROR;
 			}
 
-			b->last_buf = 1;
+			b->pos  = response;
+			b->last = b->pos + ctx->size;
+
+			b->last_buf      = 1;
+			b->memory        = 1;
 			b->last_in_chain = 1;
 
-			out.buf = b;
+			out.buf  = b;
 			out.next = NULL;
 
 			return ngx_http_next_body_filter(r, &out);
@@ -522,6 +526,13 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 		}
 
 		if (get_response(ctx, r, in, true) != NULL){
+			for (cl = in; cl; cl = cl->next) {
+				if (cl->buf->last_buf) {
+					break;
+					// cl->buf->last_buf = 0;
+					// cl->buf->last_in_chain = 1;
+				}
+			}
 			// Call ALPaCA to get the padding.
 			struct MorphInfo info = {
 				.content_type = copy_ngx_str(r->headers_out.content_type, r->pool),
@@ -560,8 +571,8 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 			out.buf  = b;
 			out.next = NULL;
 
-			// cl->buf->last_buf = 0;
-			// cl->next          = &out;
+			cl->buf->last_buf = 0;
+			cl->next          = &out;
 
 			return ngx_http_next_body_filter(r, in);
 		}
