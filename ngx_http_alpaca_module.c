@@ -3,6 +3,11 @@
 #include <ngx_http.h>
 #include <ngx_http_core_module.h>
 
+#include <string.h>
+#include <stdbool.h>
+
+
+#include "./map/map.h"
 // This struct fills up from requests
 // It's passed to rust
 struct MorphInfo {
@@ -271,6 +276,56 @@ static u_char* copy_ngx_str(ngx_str_t str, ngx_pool_t* pool) {
     return res;
 }
 
+static u_char* get_response(ngx_http_alpaca_ctx_t* ctx, ngx_http_request_t* r, ngx_chain_t* in , bool send){
+
+	u_char* response;
+	ngx_uint_t curr_chain_size = 0;
+
+	for (ngx_chain_t* cl = in; cl; cl = cl->next) {
+		curr_chain_size += (cl->buf->last) - (cl->buf->pos);
+	}
+
+	ctx->size += curr_chain_size;
+
+	/* Check if we need to allocate more space for the response */
+	if (ctx->size > ctx->capacity) {
+		ctx->capacity = (2 * ctx->capacity > ctx->size) ? (2 * ctx->capacity) : ctx->size;
+		ctx->end = ngx_pcalloc(r->pool, ctx->capacity + 1);
+		u_char* start = ctx->end;
+		ctx->end = ngx_copy(ctx->end, ctx->response, ctx->size - curr_chain_size);
+		ngx_pfree(r->pool, ctx->response);
+		ctx->response = start;
+	}
+
+	/* Iterate through every buffer of the current chain and copy the
+		* contents */
+	for (ngx_chain_t* cl = in; cl; cl = cl->next) {
+		ctx->end = ngx_copy(ctx->end, cl->buf->pos,
+							(cl->buf->last) - (cl->buf->pos));
+
+		/* If we reach the last buffer of the response, call ALPaCA */
+		if (cl->buf->last_in_chain) {
+			*ctx->end = '\0';
+			/* Copy the padding and free the memory that was allocated in
+			rust using the custom "free memory" funtion. */
+			response = ngx_pcalloc(r->pool, (ctx->size + 1) * sizeof(u_char));
+			ngx_memcpy(response, ctx->response, ctx->size + 1);
+
+			if (send == false){
+				strcpy((char *)cl->buf->pos , "\0");
+				cl->buf->last = cl->buf->pos + 1;
+			}
+
+			return response;
+		}
+		if (send == false){
+			strcpy((char *)cl->buf->pos , "\0");
+			cl->buf->last = cl->buf->pos + 1;
+		}
+	}
+	return NULL;
+}
+
 static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t* in) {
 
     ngx_buf_t   *b;
@@ -370,45 +425,20 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 
 	/* If the response is an html, wait until the whole body has been
      * captured and morph it according to ALPaCA                      */
-	if ( is_html(r) && r->headers_out.status != 404 ) {
+	if ( is_html(r) && r->headers_out.status != 404 && r == r->main) {
 
         /* Iterate through every buffer of the current chain and
          * find its content size                                 */
-		ngx_uint_t curr_chain_size = 0;
 
-        for (cl = in; cl; cl = cl->next) {
-			curr_chain_size += (cl->buf->last) - (cl->buf->pos);
-		}
+		if ((response = get_response(ctx ,r , in , true)) != NULL){
+			for (cl = in; cl; cl = cl->next) {
+				if (cl->buf->last_buf) {
+					cl->buf->last_buf = 1;
+					cl->buf->last_in_chain = 1;
+				}
+			}
 
-		ctx->size += curr_chain_size;
-
-		/* Check if we need to allocate more space for the response */
-		if (ctx->size > ctx->capacity) {
-
-            ctx->capacity = (2 * ctx->capacity > ctx->size) ? (2 * ctx->capacity) : ctx->size;
-			ctx->end      = ngx_pcalloc(r->pool, ctx->capacity + 1);
-
-            u_char* start = ctx->end;
-
-            ctx->end = ngx_copy(ctx->end, ctx->response, ctx->size - curr_chain_size);
-
-            ngx_pfree(r->pool, ctx->response);
-
-            ctx->response = start;
-		}
-
-		/* Iterate through every buffer of the current chain
-         * and copy the contents                             */
-		for (cl = in; cl; cl = cl->next) {
-
-            ctx->end = ngx_copy( ctx->end, cl->buf->pos, (cl->buf->last) - (cl->buf->pos) );
-
-			/* If we reach the last buffer of the response, call ALPaCA */
-			if (cl->buf->last_buf) {
-
-				*ctx->end = '\0';
-
-				struct MorphInfo info = {
+			struct MorphInfo info = {
 					.root      = copy_ngx_str(core_plcf->root, r->pool),
 					.uri       = copy_ngx_str(r->uri, r->pool),
 					.http_host = copy_ngx_str(r->headers_in.host->value, r->pool),
@@ -430,64 +460,59 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 					.obj_inlining_enabled = plcf->obj_inlining_enabled,
 				};
 
-				// Run alpaca
-				if ( morph_html(&info) ) {
+			// Run alpaca
+			if ( morph_html(&info) ) {
 
-                    /* Copy the morphed html and free the memory that was
-					 * allocated in rust using the custom "free memory" funtion. */
-					response = ngx_pcalloc( r->pool, info.size * sizeof(u_char) );
+				/* Copy the morphed html and free the memory that was
+					* allocated in rust using the custom "free memory" funtion. */
+				response = ngx_pcalloc( r->pool, info.size * sizeof(u_char) );
 
-                    ngx_memcpy(response, info.content, info.size);
-					ngx_pfree (r->pool, ctx->response);
+				ngx_memcpy(response, info.content, info.size);
+				ngx_pfree (r->pool, ctx->response);
 
-                    free_memory(info.content, info.size);
+				free_memory(info.content, info.size);
 
-					ctx->size = info.size;
+				ctx->size = info.size;
 
-				} else {
+			} else {
 
-					// Alpaca failed. This might happen if the content was not
-					// really html, eg it was proxied from some upstream server
-					// that returned gziped content. We log this and return the
-					// original content.
+				// Alpaca failed. This might happen if the content was not
+				// really html, eg it was proxied from some upstream server
+				// that returned gziped content. We log this and return the
+				// original content.
 
-					ngx_log_error( NGX_LOG_ERR                                            ,
-                                   r->connection->log                                     ,
-                                   0                                                      ,
-						           "[Alpaca filter]: could not process html content. If "
-						           "you use proxy_pass, set proxy_set_header "
-						           "Accept-Encoding \"\" so that the upstream server "
-						           "returns raw html, "
-                                 );
+				ngx_log_error( NGX_LOG_ERR                                            ,
+								r->connection->log                                     ,
+								0                                                      ,
+								"[Alpaca filter]: could not process html content. If "
+								"you use proxy_pass, set proxy_set_header "
+								"Accept-Encoding \"\" so that the upstream server "
+								"returns raw html, "
+								);
 
-					response = ctx->response;
-				}
-
-				/* Return the modified response in a new buffer */
-				b = ngx_calloc_buf(r->pool);
-
-				if (b == NULL) {
-					return NGX_ERROR;
-				}
-
-				b->pos  = response;
-				b->last = b->pos + ctx->size;
-
-				b->last_buf      = 1;
-				b->memory        = 1;
-				b->last_in_chain = 1;
-
-				out.buf  = b;
-				out.next = NULL;
-
-				return ngx_http_next_body_filter(r, &out);
+				response = ctx->response;
 			}
+
+			ngx_http_set_ctx(r, NULL, ngx_http_alpaca_module);
+
+			b = ngx_calloc_buf(r->pool);
+			if (b == NULL) {
+				return NGX_ERROR;
+			}
+
+			b->last_buf = 1;
+			b->last_in_chain = 1;
+
+			out.buf = b;
+			out.next = NULL;
+
+			return ngx_http_next_body_filter(r, &out);
 		}
 
 		/* Do not call the next filter unless the whole html has been captured */
 		return NGX_OK;
-
-	} else if (is_paddable(r)) {
+	}
+	else if (is_paddable(r) && r == r->main) {
 
 		printf("PADDDDAAAABLEEE\n");
 
@@ -496,62 +521,53 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 			return ngx_http_next_body_filter(r, in);
 		}
 
-		/* Iterate through every buffer of the current chain and find its content size */
-		for (cl = in; cl; cl = cl->next) {
-			ctx->size += (cl->buf->last) - (cl->buf->pos);
-		}
+		if (get_response(ctx, r, in, true) != NULL){
+			// Call ALPaCA to get the padding.
+			struct MorphInfo info = {
+				.content_type = copy_ngx_str(r->headers_out.content_type, r->pool),
+				.query        = copy_ngx_str(r->args, r->pool),
+				.size         = ctx->size,
+			};
 
-		for (cl = in; cl; cl = cl->next) {
-
-            /* If we reach the last buffer of the response, pad the object
-			 * according to ALPaCA */
-			if (cl->buf->last_buf) {
-
-                // Call ALPaCA to get the padding.
-				struct MorphInfo info = {
-					.content_type = copy_ngx_str(r->headers_out.content_type, r->pool),
-					.query        = copy_ngx_str(r->args, r->pool),
-					.size         = ctx->size,
-				};
-
-				if ( !morph_object(&info) ) {
-					// Call the next filter if something went wrong.
-					return ngx_http_next_body_filter(r, in);
-				}
-
-				/* Copy the padding and free the memory that was allocated in
-				 * rust using the custom "free memory" funtion.               */
-				response = ngx_pcalloc( r->pool, (info.size) * sizeof(u_char) );
-
-                ngx_memcpy(response, info.content, info.size);
-
-                free_memory(info.content, info.size);
-
-				ctx->size = info.size;
-
-				/* Return the padding in a new buffer */
-				b = ngx_calloc_buf(r->pool);
-				if (b == NULL) {
-					return NGX_ERROR;
-				}
-
-				b->pos  = response;
-				b->last = b->pos + ctx->size;
-
-				b->last_buf      = 1;
-				b->memory        = 1;
-				b->last_in_chain = 1;
-
-				out.buf  = b;
-				out.next = NULL;
-
-				cl->buf->last_buf = 0;
-				cl->next          = &out;
-
+			if ( !morph_object(&info) ) {
+				// Call the next filter if something went wrong.
 				return ngx_http_next_body_filter(r, in);
 			}
+
+			/* Copy the padding and free the memory that was allocated in
+				* rust using the custom "free memory" funtion.               */
+			response = ngx_pcalloc( r->pool, (info.size) * sizeof(u_char) );
+
+			ngx_memcpy(response, info.content, info.size);
+
+			free_memory(info.content, info.size);
+
+			ctx->size = info.size;
+
+			/* Return the padding in a new buffer */
+			b = ngx_calloc_buf(r->pool);
+			if (b == NULL) {
+				return NGX_ERROR;
+			}
+
+			b->pos  = response;
+			b->last = b->pos + ctx->size;
+
+			b->last_buf      = 1;
+			b->memory        = 1;
+			b->last_in_chain = 1;
+
+			out.buf  = b;
+			out.next = NULL;
+
+			// cl->buf->last_buf = 0;
+			// cl->next          = &out;
+
+			return ngx_http_next_body_filter(r, in);
 		}
 		return ngx_http_next_body_filter(r, in);
+	}
+	else if (r != r->main){
 	}
 	return ngx_http_next_body_filter(r, in);
 }
