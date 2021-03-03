@@ -194,6 +194,31 @@ pub extern "C" fn inline_css_content(pinfo: *mut MorphInfo , req_mapper : Map) -
     return content_to_c(content, info);
 }
 
+#[no_mangle]
+pub extern "C" fn morph_html_from_content(pinfo: *mut MorphInfo , req_mapper : Map) -> u8 {
+
+    std::env::set_var("RUST_BACKTRACE", "full");
+    let info = unsafe { &mut *pinfo };
+
+    let uri = c_string_to_str(info.uri).unwrap();
+
+    let html = match c_string_to_str(info.content) {
+        Ok(s)  => s,
+        Err(e) => {
+            eprint!("libalpaca: cannot read html content of {}: {}\n", uri, e);
+            return 0;       // return NULL pointer if html cannot be converted to a string
+        }
+    };
+
+    let document = dom::parse_html(html);
+
+    // Vector of objects found in the html.
+    dom::parse_html_objects_from_content( &document, req_mapper);
+
+    let content = dom::serialize_html(&document);
+    return content_to_c(content, info);
+}
+
 /// It samples a new page using probabilistic morphing, changes the
 /// references to its objects accordingly, and pads it.
 #[no_mangle]

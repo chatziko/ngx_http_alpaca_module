@@ -259,7 +259,7 @@ pub fn parse_object_names(document: &NodeRef) -> Vec<String> {
 
 		let temp = format!( "/{}", path.as_str());
 
-		objects.push(temp);
+		objects.push(temp.clone());
 
 		let rel  = node_get_attribute(node, "rel").unwrap_or_default();
 		match ( name.as_str(), rel.as_str() ) {
@@ -276,13 +276,12 @@ pub fn parse_object_names(document: &NodeRef) -> Vec<String> {
 		let refc         = last_child.into_text_ref().unwrap();
 
         let refc_val     = refc.borrow();
-		let mut images_paths = css_parse_all_images(&refc_val);
+		let images_paths = css_parse_all_images(&refc_val);
 
-		for img in images_paths.iter_mut() {
-			*img = format!("/{}",img);
+		for img in images_paths {
+			let temp = format!("/{}",img);
+			objects.push(temp);
 		}
-
-		objects.append( &mut images_paths);
 	}
 
 	// If no favicon was found, insert an empty one
@@ -358,6 +357,54 @@ pub fn parse_css_and_inline(document: &NodeRef, req_mapper : Map) -> () {
 		if !removed {
 			all_removed = true;
 		}
+	}
+}
+
+pub fn parse_html_objects_from_content(document: &NodeRef, req_mapper : Map) -> () {
+	let mut objects: Vec<Object> = Vec::with_capacity(10);
+	let mut found_favicon        = false;
+
+	for node_data in document.select("img,link,script").unwrap() {
+
+        let node = node_data.as_node();
+		let name = node_data.name.local.to_lowercase();
+
+		let path_attr = if name == "link" { "href" } else { "src" };
+		let path      = match node_get_attribute(node, path_attr) {
+			Some(p) if p != "" && !p.starts_with("data:") => p       ,
+			_                                             => continue,
+		};
+
+		let rel  = node_get_attribute(node, "rel").unwrap_or_default();
+		let kind = match ( name.as_str(), rel.as_str() ) {
+			("link", "stylesheet")                       => ObjectKind::CSS                          ,
+			("link", "shortcut icon") | ("link", "icon") => { found_favicon = true; ObjectKind::IMG },
+			("script", _)                                => ObjectKind::JS                           ,
+			("img", _)                                   => ObjectKind::IMG                          ,
+			_                                            => continue                                 ,
+		};
+
+		/* Consider the posibility that the css file already has some GET parameters */
+		let split: Vec<&str> = path.split('?').collect();
+		let relative         = format!("/{}",split[0]);
+
+		println!("REL {}",relative);
+
+		let res = get_map_element(req_mapper,relative);
+
+		println!("DONE");
+
+		// let fullpath;
+
+		// match uri_to_abs_fs_path(root, relative, uri, alias) {
+		// 	Some(absolute) => fullpath = absolute,
+		// 	None           => continue
+		// }
+
+		// match aux::stringify_error( fs::read(&fullpath) ) {
+		// 	Ok(data) => objects.push( Object::existing(&data, kind, path, node) ),
+		// 	Err(e)   => { eprint!("libalpaca: cannot read {} ({})\n", fullpath, e); continue },
+		// }
 	}
 }
 

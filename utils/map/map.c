@@ -127,12 +127,16 @@ void map_set(map m, const char *key, void *value) {
 void *map_get(const map m, const char *key) {
   int b = hash(key) % m->capacity;
 
+
+
   // Search linearly for a matching key through the appropriate linked list.
   for (struct cell *curr = m->elems[b]; curr != NULL; curr = curr->next) {
+
     if (strcmp(curr->key, key) == 0){
       return curr->value;
     }
   }
+  printf("KEY NOT FOUND\n");
 
   // Key not found.
   bool key_found = false;
