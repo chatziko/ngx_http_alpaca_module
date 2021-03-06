@@ -5,50 +5,55 @@ use kuchiki::traits::*;
 use kuchiki::{ parse_html_with_options, NodeRef, ParseOpts };
 use std::fs::File;
 use std::io::prelude::*;
-use std::{ str, fs, path::Path };
+use std::{ str, fs, path::Path, ptr };
 use std::ffi::CString;
 
+// use std::os;
+// use std::io::BufWriter;
+// use std::io::Write;
 
+// use std::io::prelude::*;
+// use std::fs::File;
 
-/// Defines our basic object types, each of which has a corresponding
-/// unique (distribution, padding type) tuple.
+// Defines our basic object types, each of which has a corresponding
+// unique (distribution, padding type) tuple.
 #[derive(PartialEq)]
 pub enum ObjectKind {
-    FakeIMG,  /// Fake alpaca image
+    FakeIMG,  // Fake alpaca image
     HTML   ,
     CSS    ,
-    IMG    ,  /// IMG: PNG, JPEG, etc.
+    IMG    ,  // IMG: PNG, JPEG, etc.
 	JS     ,
 	CssImg ,
     Unknown,
 }
 
-/// An object to be used in the morphing process.
+// An object to be used in the morphing process.
 pub struct Object {
-    /// Type of the Object
+    // Type of the Object
     pub kind: ObjectKind,
-    /// Content (Vector of bytes) of the Object
+    // Content (Vector of bytes) of the Object
     pub content: Vec<u8>,
-    /// Node in the html
+    // Node in the html
     pub node: Option<NodeRef>,
-    /// Size to pad the Object to
+    // Size to pad the Object to
     pub target_size: Option<usize>,
-    /// The uri of the object, as mentioned in the html source
+    // The uri of the object, as mentioned in the html source
     pub uri: String,
 }
 
 #[repr(C)]
 pub struct map {
-    pub elems: *mut *mut cell,
-    pub capacity: libc::c_int,
-    pub size: libc::c_int,
+    pub elems   : *mut *mut cell,
+    pub capacity: libc::c_int   ,
+    pub size    : libc::c_int   ,
 }
 
 #[repr(C)]
 pub struct cell {
-    pub next: *mut cell,
+    pub next : *mut cell        ,
     pub value: *mut libc::c_void,
-    pub key: [libc::c_char; 0],
+    pub key  : [libc::c_char; 0],
 }
 
 #[repr(C)]
@@ -69,18 +74,18 @@ extern "C" {
 
 impl Object {
 
-    /// Construct a real object from the html page
+    // Construct a real object from the html page
     pub fn existing(content: &[u8], kind: ObjectKind, uri: String, node: &NodeRef) -> Object {
         Object {
-            kind        : kind               ,
-            content     : content.to_vec()   ,
+            kind        : kind                ,
+            content     : content.to_vec()    ,
             node        : Some( node.clone() ),
-            target_size : None               ,
-            uri         : uri                ,
+            target_size : None                ,
+            uri         : uri                 ,
         }
     }
 
-    /// Create padding object
+    // Create padding object
     pub fn fake_image(target_size: usize) -> Object {
         Object {
             kind        : ObjectKind::FakeIMG       ,
@@ -175,7 +180,7 @@ fn remove_whitespace(s: &str) -> String {
     s.chars().filter( |c| !c.is_whitespace() ).collect()
 }
 
-/// Parses the object's kind from its raw representation
+// Parses the object's kind from its raw representation
 pub fn parse_object_kind(mime: &str) -> ObjectKind {
 	match mime {
 		"text/html"                  => ObjectKind::HTML,
@@ -185,8 +190,8 @@ pub fn parse_object_kind(mime: &str) -> ObjectKind {
     }
 }
 
-/// Parses the target size of an object from its HTTP request query.
-/// Returns 0 on error.
+// Parses the target size of an object from its HTTP request query.
+// Returns 0 on error.
 pub fn parse_target_size(query: &str) -> usize {
 
     let split1: Vec<&str> = query.split("alpaca-padding=").collect();
@@ -200,7 +205,7 @@ pub fn parse_target_size(query: &str) -> usize {
 	}
 }
 
-/// Parses the objects contained in an HTML page.
+// Parses the objects contained in an HTML page.
 pub fn parse_css_names(document: &NodeRef) -> Vec<String> {
 
     // Objects vector
@@ -242,7 +247,7 @@ pub fn parse_css_names(document: &NodeRef) -> Vec<String> {
 	objects
 }
 
-/// Parses the objects contained in an HTML page.
+// Parses the objects contained in an HTML page.
 pub fn parse_object_names(document: &NodeRef) -> Vec<String> {
 
     // Objects vector
@@ -311,12 +316,65 @@ pub fn get_map_element(req_mapper : Map , uri : String) -> Vec<u8> {
 
     let temp_old = unsafe { &mut *temp_old };
 
-	let mut element_data : Vec<u8> = Vec::new();
+	// let mut element_data : Vec<u8> = Vec::new();
 
-	for i in 0..temp_old.length {
-		element_data.push(unsafe{ *(temp_old.content.add(i as usize))  as u8});
-		// print!("{}" , unsafe{ *(temp_old.content.add(i as usize))  as u8 as char});
-	}
+	// for i in 0..temp_old.length {
+	// 	element_data.push(unsafe{ *(temp_old.content.add(i as usize))  as u8});
+	// 	// print!("{}" , unsafe{ *(temp_old.content.add(i as usize))  as u8 as char});
+	// }
+
+	// let mut dst = vec!['a' as u8];
+	let mut element_data : Vec<u8> = Vec::new();
+    element_data.reserve(temp_old.length as usize);
+
+	// println!("CHECKPOINT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! = {}" , element_data.capacity()  );
+	// println!("CHECKPOINT ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ = {}" , element_data.capacity()  );
+
+    unsafe {
+
+        let dst_ptr = element_data.as_mut_ptr().offset(0) as *mut i8;
+
+        ptr::copy_nonoverlapping(temp_old.content, dst_ptr, temp_old.length as usize);
+
+        element_data.set_len(temp_old.length as usize);
+
+        // fwrite();
+        // let mut file = File::create("foo.txt")?;
+        // file.write_all(b"Hello, world!")?;
+
+        // for i in element_data.iter() {
+        //     print!("{}", *i as u8 as char);
+        //     // println!("{}", *dst_ptr as )
+        // }
+
+
+        // println!("CHECKPOINT 1 !!!!!!!!!!!!!!!!!!!!!!!!!!");
+        // // let mut f = File::create("/home/michael/Desktop/ALPaCA_Project/out.gif").expect("Unable to create file");
+
+        // let new_file = File::create(&Path::new("/home/michael/Desktop/ALPaCA_Project/out.gif")).unwrap();
+        // println!("CHECKPOINT 2 !!!!!!!!!!!!!!!!!!!!!!!!!!");
+        // let mut writer = BufWriter::new(new_file);
+        // println!("CHECKPOINT 3 !!!!!!!!!!!!!!!!!!!!!!!!!!");
+
+    	// let mut new_elem : Vec<u8> = Vec::new();
+        // new_elem.copy_from_slice(&dst);
+        // println!("CHECKPOINT 4 !!!!!!!!!!!!!!!!!!!!!!!!!!");
+
+        // writer.write(String::from_utf8(new_elem).unwrap().as_bytes()).unwrap();
+        // writer.flush().unwrap();
+        // println!("CHECKPOINT 5 !!!!!!!!!!!!!!!!!!!!!!!!!!");
+        // let bytes: Vec<u8> = try!(bincode::serialize(dst, bincode::Infinite));
+
+        // f.write_all(&bytes);
+
+        // for i in &dst {
+        //     f.write_all(&[*i]).expect("Unable to write data");
+        // }
+
+        // let string_utf8_result = String::from_utf8(dst).unwrap();
+        // println!("CHECKPOINT 2 ~~~~~~~~~~~~~~~~~~~~~~~ = {}" , string_utf8_result );
+    }
+
 
 	// println!("{}" , unsafe{*temp_old.content as u8 as char}  );
 	// println!("{}" , unsafe{ *(temp_old.content.add(1))  as u8 as char} );
@@ -471,7 +529,7 @@ pub fn parse_html_objects_from_content(document: &NodeRef, req_mapper : Map) -> 
 }
 
 
-/// Parses the objects contained in an HTML page.
+// Parses the objects contained in an HTML page.
 pub fn parse_objects(document: &NodeRef, root: &str, uri: &str, alias: usize) -> Vec<Object> {
 
     // Objects vector
@@ -607,8 +665,8 @@ pub fn insert_empty_favicon(document: &NodeRef) {
     node.append(elem);
 }
 
-/// Maps a (relative or absolute) uri, to an absolute filesystem path.
-/// Returns None if uri_path is located in another server
+// Maps a (relative or absolute) uri, to an absolute filesystem path.
+// Returns None if uri_path is located in another server
 fn uri_to_abs_fs_path(root: &str, relative: &str, page_uri: &str, alias: usize) -> Option<String> {
 
 	if relative.starts_with("https://") || relative.starts_with("http://") {
