@@ -52,6 +52,12 @@ pub struct cell {
     pub key: [libc::c_char; 0],
 }
 
+#[repr(C)]
+pub struct RequestData {
+    pub content: *mut libc::c_char,
+    pub length : u32,
+}
+
 pub type Map = *mut map;
 
 #[link(name = "map", kind = "static")]
@@ -293,17 +299,43 @@ pub fn parse_object_names(document: &NodeRef) -> Vec<String> {
 	objects
 }
 
-pub fn get_map_element(req_mapper : Map , uri : String) -> String {
+pub fn get_map_element(req_mapper : Map , uri : String) -> Vec<u8> {
 
 	println!("URI {}",uri);
 
 	let c_uri = CString::new(uri).expect("CString::new Failed");
 
 	// let c_uri: *mut libc::c_char = uri.as_ptr() as *mut libc::c_char;
-    let temp = unsafe { map_get(req_mapper, c_uri.as_ptr()) } as *mut libc::c_char;
-    let temp = unsafe { CStr::from_ptr(temp) };
-    let str_slice: &str = temp.to_str().unwrap();
-	str_slice.to_owned()
+    let temp_old = unsafe { map_get(req_mapper, c_uri.as_ptr()) } as *mut RequestData;
+    // let temp = unsafe { CStr::from_ptr(temp_old) };
+
+    let temp_old = unsafe { &mut *temp_old };
+
+	let mut element_data : Vec<u8> = Vec::new();
+
+	for i in 0..temp_old.length {
+		element_data.push(unsafe{ *(temp_old.content.add(i as usize))  as u8});
+		print!("{}" , unsafe{ *(temp_old.content.add(i as usize))  as u8 as char});
+	}
+
+	// println!("{}" , unsafe{*temp_old.content as u8 as char}  );
+	// println!("{}" , unsafe{ *(temp_old.content.add(1))  as u8 as char} );
+	// println!("{}" , unsafe{ *(temp_old.content.add(2))  as u8 as char} );
+
+	// let new_temp = unsafe{ CString::from_raw(temp_old.content).into_bytes() };
+
+    // println!();
+    // for i in new_temp {
+    //     print!("{}", i as char);
+    // }
+    // println!();
+
+    // let str_slice: &str = temp.to_str().unwrap();
+	// str_slice.to_owned()
+
+	// String::from("asdasdas")
+
+	element_data
 }
 
 
@@ -327,10 +359,9 @@ pub fn parse_css_and_inline(document: &NodeRef, req_mapper : Map) -> () {
 
 		let res = get_map_element(req_mapper, format!("/{}",path) );
 
-		println!("{}", res);
-
 		let par = node.parent().unwrap();
-		let new_node = create_css_node(&res);
+		let temp = res.iter().map(|&c| c as char).collect::<String>();
+		let new_node = create_css_node(&temp);
 		par.append(new_node);
 		println!("");
 	}
@@ -391,6 +422,9 @@ pub fn parse_html_objects_from_content(document: &NodeRef, req_mapper : Map) -> 
 		println!("REL {}",relative);
 
 		let res = get_map_element(req_mapper,relative);
+
+		let vec_of_chars: Vec<char> = res.iter().map(|byte| *byte as char).collect();
+		println!("vec_of_chars: {:?}", vec_of_chars);
 
 		println!("DONE");
 

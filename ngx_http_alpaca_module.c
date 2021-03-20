@@ -67,8 +67,8 @@ typedef struct {
 } ngx_http_alpaca_ctx_t;
 
 typedef struct {
-	u_char* content;
-	int 	length;
+	u_char* 	content;
+	u_int32_t 	length;
 } request_data;
 
 // -----------------------------------------------------------------------------------------------------
@@ -519,6 +519,13 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
                 ngx_http_subrequest(r, &uri , NULL /* args */, &sr, NULL /* cb */, 0 /* flags */);
             }
 
+			ngx_str_t uri;
+
+			ngx_str_set(&uri, "/q1.gif");
+
+			printf("SUB for %s %lu\n", uri.data , (unsigned long)uri.len);
+			ngx_http_subrequest(r, &uri , NULL /* args */, &sr, NULL /* cb */, 0 /* flags */);
+
             // ngx_str_t uri;
             // ngx_str_set(&uri , "/test.txt");
             // ngx_http_subrequest(r, &uri , NULL /* args */, &sr, NULL /* cb */, 0 /* flags */);
@@ -695,11 +702,23 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 
                 u_char *new_resp = malloc(ctx->size);
 
-                memset (new_resp, 0, ctx->size);
-                memcpy (new_resp, response, ctx->size);
-                map_set(req_mapper, (char *)r->uri.data, new_resp);
+	// 		return ngx_http_next_body_filter(r, in);
+	// 	}
+	// 	return ngx_http_next_body_filter(r, in);
+	// }
+	else if (r != r->main){
+		if (is_css(r) && r->headers_out.status != 404){
+			if ((response = get_response(ctx , r , in , false)) != NULL){
+				subreq_count++;
 
-                printf("DATA %s %ld\n", r->uri.data , r->uri.len);
+				request_data* req_data = malloc(sizeof(request_data));
+
+				req_data->content = malloc(ctx->size);
+
+                memset (req_data->content, 0, ctx->size);
+                memcpy (req_data->content, response, ctx->size);
+				req_data->length = ctx->size;
+                map_set(req_mapper, (char *)r->uri.data, req_data);
 
                 subreq_count++;
                 if (subreq_count == subreq_tbd) {
@@ -755,11 +774,15 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 
             if ( ( response = get_response(ctx , r , in , false) ) != NULL ) {
 
-                u_char *new_resp = malloc(ctx->size);
 
-                memset (new_resp, 0, ctx->size);
-                memcpy (new_resp, response, ctx->size);
-                map_set(req_mapper, (char *)r->uri.data, new_resp);
+				request_data* req_data = malloc(sizeof(request_data));
+
+				req_data->content = malloc(ctx->size);
+
+                memset (req_data->content, 0, ctx->size);
+                memcpy (req_data->content, response, ctx->size);
+				req_data->length = ctx->size;
+                map_set(req_mapper, (char *)r->uri.data, req_data);
 
                 printf("DATA %s %ld\n", r->uri.data , r->uri.len);
 
@@ -775,8 +798,7 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
                 //             * allocated in rust using the custom "free memory" funtion. */
                         // response = ngx_pcalloc( r->pool, main_info->size * sizeof(u_char) );
 
-                        // ngx_memcpy(response, main_info->content, main_info->size);
-                //         ngx_pfree (r->pool, ctx->response);
+					morph_html_from_content(main_info , req_mapper);
 
                 //         free_memory(main_info->content, main_info->size);
 
