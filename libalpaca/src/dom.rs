@@ -6,8 +6,7 @@ use kuchiki::{ parse_html_with_options, NodeRef, ParseOpts };
 use std::fs::File;
 use std::io::prelude::*;
 use std::{ str, fs, path::Path };
-use std::ffi::CStr;
-use std::ffi::{CString};
+use std::ffi::CString;
 
 
 
@@ -63,8 +62,8 @@ pub type Map = *mut map;
 #[link(name = "map", kind = "static")]
 
 extern "C" {
-    fn map_create() -> Map;
-    fn map_set(m: Map, key: *const libc::c_char, value: *mut libc::c_void);
+    // fn map_create() -> Map;
+    // fn map_set(m: Map, key: *const libc::c_char, value: *mut libc::c_void);
     fn map_get(m: Map, key: *const libc::c_char) -> *mut libc::c_void;
 }
 
