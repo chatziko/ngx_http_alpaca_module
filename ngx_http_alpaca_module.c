@@ -204,20 +204,20 @@ static ngx_int_t is_css(ngx_http_request_t* r) {
     return ngx_strncmp(r->headers_out.content_type.data, "text/css", 8) == 0;
 }
 
-// static ngx_int_t is_paddable(ngx_http_request_t* r) {
+static ngx_int_t is_paddable(ngx_http_request_t* r) {
 
-    // printf("%s\n",r->uri.data);
-    // if(strstr((const char*)r->uri.data, ".png?alpaca-padding=") != NULL) {
-    //      r->headers_out.content_type.data = (u_char*)"image/png";
-    //      r->headers_out.content_type.len = 9;
-    //      r->headers_out.content_type_len = 9;
-    // }
-    return ( r->headers_out.content_type.len >= 6                             &&
-             ngx_strncmp(r->headers_out.content_type.data, "image/", 6) == 0)                                              ||
-             ngx_strncmp(r->headers_out.content_type.data, "application/javascript", r->headers_out.content_type.len) == 0 ||
-             ngx_strncmp(r->headers_out.content_type.data, "text/css"              , r->headers_out.content_type.len) == 0;
+	// printf("%s\n",r->uri.data);
+	// if(strstr((const char*)r->uri.data, ".png?alpaca-padding=") != NULL) {
+	// 	r->headers_out.content_type.data = (u_char*)"image/png";
+	// 	r->headers_out.content_type.len = 9;
+	// 	r->headers_out.content_type_len = 9;
+	// }
+	return ( r->headers_out.content_type.len >= 6                             &&
+		     ngx_strncmp(r->headers_out.content_type.data, "image/", 6) == 0)                                              ||
+		     ngx_strncmp(r->headers_out.content_type.data, "application/javascript", r->headers_out.content_type.len) == 0 ||
+		     ngx_strncmp(r->headers_out.content_type.data, "text/css"              , r->headers_out.content_type.len) == 0;
 
-        //    || ngx_strncmp(r->headers_out.content_type.data, "text/plain", r->headers_out.content_type.len) == 0;
+		//    || ngx_strncmp(r->headers_out.content_type.data, "text/plain", r->headers_out.content_type.len) == 0;
 }
 
 static ngx_int_t ngx_http_alpaca_header_filter(ngx_http_request_t* r) {
@@ -622,94 +622,83 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
         return NGX_OK;
 
     }
-	// else if (is_paddable(r) && r == r->main) {
+	else if (is_paddable(r) && r == r->main) {
 
-        if (subreq_count != subreq_tbd){
-            ngx_log_error( NGX_LOG_ERR                                            ,
-                           r->connection->log                                     ,
-                           0                                                      ,
-                           "[Alpaca filter]: could not process html content. If "
-                           "you use proxy_pass, set proxy_set_header "
-                           "Accept-Encoding \"\" so that the upstream server "
-                           "returns raw html, "
-                         );
-            return NGX_ERROR;
-        }
 
-        /* Proceed only if there is an ALPaCA GET parameter. */
-        if (r->args.len == 0)
-            return ngx_http_next_body_filter(r, in);
+		// if (subreq_count != subreq_tbd){
+		// 	ngx_log_error( NGX_LOG_ERR                                            ,
+		// 							r->connection->log                                     ,
+		// 							0                                                      ,
+		// 							"[Alpaca filter]: could not process html content. If "
+		// 							"you use proxy_pass, set proxy_set_header "
+		// 							"Accept-Encoding \"\" so that the upstream server "
+		// 							"returns raw html, "
+		// 							);
+		// 	return NGX_ERROR;
+		// }
 
-        if (get_response(ctx, r, in, true) != NULL) {
+		/* Proceed only if there is an ALPaCA GET parameter. */
+		if (r->args.len == 0)
+			return ngx_http_next_body_filter(r, in);
+
+		if (get_response(ctx, r, in, true) != NULL) {
 
             for (cl = in; cl; cl = cl->next) {
-                if (cl->buf->last_buf) {
-                    break;
-                    // cl->buf->last_buf = 0;
-                    // cl->buf->last_in_chain = 1;
+				if (cl->buf->last_buf) {
+					// cl->buf->last_buf = 0;
+					// cl->buf->last_in_chain = 1;
+					break;
                 }
-            }
+			}
 
             // Call ALPaCA to get the padding
-            struct MorphInfo info = {
-                .content_type = copy_ngx_str(r->headers_out.content_type, r->pool),
-                .query        = copy_ngx_str(r->args, r->pool),
-                .size         = ctx->size,
-            };
+			struct MorphInfo info = {
+				.content_type = copy_ngx_str(r->headers_out.content_type, r->pool),
+				.query        = copy_ngx_str(r->args, r->pool),
+				.size         = ctx->size,
+			};
 
-            //Get corresponding content for specific file
-            //And pass it to morph_object
+			//Get corresponding content for specific file
+			//And pass it to morph_object
 
-            if ( !morph_object(&info) ) {
-                // Call the next filter if something went wrong.
-                return ngx_http_next_body_filter(r, in);
-            }
+			if ( !morph_object(&info) ) {
+				// Call the next filter if something went wrong.
+				return ngx_http_next_body_filter(r, in);
+			}
 
-            /* Copy the padding and free the memory that was allocated in *
-             * rust using the custom "free memory" funtion.               */
-            response = ngx_pcalloc( r->pool, (info.size) * sizeof(u_char) );
+			/* Copy the padding and free the memory that was allocated in *
+			 * rust using the custom "free memory" funtion.               */
+			response = ngx_pcalloc( r->pool, (info.size) * sizeof(u_char) );
 
-            ngx_memcpy(response, info.content, info.size);
+			ngx_memcpy(response, info.content, info.size);
 
-            free_memory(info.content, info.size);
+			free_memory(info.content, info.size);
 
-            ctx->size = info.size;
+			ctx->size = info.size;
 
-            /* Return the padding in a new buffer */
-            b = ngx_calloc_buf(r->pool);
-            if (b == NULL) {
-                return NGX_ERROR;
-            }
+			/* Return the padding in a new buffer */
+			b = ngx_calloc_buf(r->pool);
+			if (b == NULL) {
+				return NGX_ERROR;
+			}
 
-            b->pos  = response;
-            b->last = b->pos + ctx->size;
+			b->pos  = response;
+			b->last = b->pos + ctx->size;
 
-            b->last_buf      = 1;
-            b->memory        = 1;
-            b->last_in_chain = 1;
+			b->last_buf      = 1;
+			b->memory        = 1;
+			b->last_in_chain = 1;
 
-            out.buf  = b;
-            out.next = NULL;
+			out.buf  = b;
+			out.next = NULL;
 
-            cl->buf->last_buf = 0;
-            cl->next          = &out;
+			cl->buf->last_buf = 0;
+			cl->next          = &out;
 
-            return ngx_http_next_body_filter(r, in);
-        }
-        return ngx_http_next_body_filter(r, in);
-
-    } else if (r != r->main) {
-
-        if ( is_css(r) && r->headers_out.status != 404 ) {
-
-            if ( ( response = get_response(ctx , r , in , false) ) != NULL ) {
-
-                u_char *new_resp = malloc(ctx->size);
-
-	// 		return ngx_http_next_body_filter(r, in);
-	// 	}
-	// 	return ngx_http_next_body_filter(r, in);
-	// }
+			return ngx_http_next_body_filter(r, in);
+		}
+		return ngx_http_next_body_filter(r, in);
+	}
 	else if (r != r->main){
 		if (is_css(r) && r->headers_out.status != 404){
 			if ((response = get_response(ctx , r , in , false)) != NULL){

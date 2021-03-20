@@ -215,9 +215,43 @@ pub extern "C" fn morph_html_from_content(pinfo: *mut MorphInfo, req_mapper: Map
     let document = dom::parse_html(html);
 
     // Vector of objects found in the html.
-    dom::parse_html_objects_from_content(&document, req_mapper);
+    let mut objects = dom::parse_html_objects_from_content(&document, req_mapper);
 
-    let content = dom::serialize_html(&document);
+    keep_local_objects(&mut objects);
+
+    let mut orig_n = objects.len();
+
+    let target_size = match if info.probabilistic != 0 {
+        if info.obj_inlining_enabled == true {
+            morph_probabilistic_with_inl(&document, &mut objects, &info, &mut orig_n)
+        } else {
+            morph_probabilistic(&document, &mut objects, &info)
+        }
+    } else {
+        if info.obj_inlining_enabled == true {
+            morph_deterministic_with_inl(&document, &mut objects, &info, &mut orig_n)
+        } else {
+            morph_deterministic(&document, &mut objects, &info)
+        }
+    } {
+        Ok(s) => s,
+        Err(e) => {
+            eprint!("libalpaca: cannot morph: {}\n", e);
+            return document_to_c(&document, info);
+        }
+    };
+
+    match insert_objects_refs(&document, &objects, orig_n) {
+        Ok(_) => {}
+        Err(e) => {
+            eprint!("libalpaca: insert_objects_refs failed: {}\n", e);
+            return document_to_c(&document, info);
+        }
+    }
+
+    let mut content = dom::serialize_html(&document);
+    get_html_padding(&mut content, target_size); // Pad the html to the target size.
+
     return content_to_c(content, info);
 }
 
