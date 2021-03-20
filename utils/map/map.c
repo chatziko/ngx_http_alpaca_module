@@ -116,6 +116,7 @@ void map_set(map m, const char *key, void *value) {
   strcpy(new->key, key);
   m->elems[b] = new;
   m->size += 1;
+
 }
 
 /**
@@ -129,7 +130,6 @@ void *map_get(const map m, const char *key) {
   // Search linearly for a matching key through the appropriate linked list.
   for (struct cell *curr = m->elems[b]; curr != NULL; curr = curr->next) {
     if (strcmp(curr->key, key) == 0){
-      printf("KEY FOUND %s\n", (char *)curr->value);
       return curr->value;
     }
   }

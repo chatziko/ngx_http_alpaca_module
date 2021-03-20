@@ -130,38 +130,52 @@ pub extern "C" fn get_html_required_files(pinfo: *mut MorphInfo , length : *mut 
     ptr
 }
 
+#[no_mangle]
+pub extern "C" fn get_required_css_files(pinfo: *mut MorphInfo , length : *mut c_int ) -> *mut *mut libc::c_char{
+    std::env::set_var("RUST_BACKTRACE", "full");
+    let info = unsafe { &mut *pinfo };
+    let uri = c_string_to_str(info.uri).unwrap();
 
+    // /* Convert arguments into &str */
+    let html = match c_string_to_str(info.content) {
+        Ok(s) => s,
+        Err(e) => {
+            eprint!("libalpaca: cannot read html content of {}: {}\n", uri, e);
+            return std::ptr::null_mut();       // return NULL pointer if html cannot be converted to a string
+        }
+    };
 
-// #[no_mangle]
-// pub extern "C" fn morph_html_from_content(pinfo: *mut MorphInfo , req_mapper : Map) -> u8 {
+    let document = dom::parse_html(html);
 
-//     let st = String::from("/test.txt");
-//     let c_world: *mut libc::c_char = st.as_ptr() as *mut libc::c_char;
-//     println!("EEYEYEYY!!!!!!!!!!!!!");
-//     let temp = unsafe { map_get(req_mapper, c_world) } as *mut libc::c_char;
-//     let temp = unsafe { CStr::from_ptr(temp) };
-//     println!("EEYEYEYY!!!!!!!!!!!!!");
+    let mut objects = dom::parse_css_names(&document); // Vector of objects found in the html.
 
-//     let str_slice: &str = temp.to_str().unwrap();
-//     println!("EEYEYEYY!!!!!!!!!!!!!");
+    let mut object_uris = vec![];
+    for obj in &mut *objects {
+        object_uris.push( CString::new( format!( "{}",obj.to_owned() ) ).unwrap() );
+    }
 
-//     println!("{}",str_slice);
-//     println!("EEYEYEYY!!!!!!!!!!!!!");
+    let mut out = object_uris.into_iter().map(|s| s.into_raw()).collect::<Vec<_>>();
 
-//     0
-// }
+    out.shrink_to_fit();
 
+    let len = out.len();
+    let ptr = out.as_mut_ptr();
+    std::mem::forget(out);
 
+    unsafe {
+        std::ptr::write(length, len as c_int);
+    }
+
+    ptr
+}
 
 #[no_mangle]
-pub extern "C" fn morph_html_from_content(pinfo: *mut MorphInfo , req_mapper : Map) -> u8 {
+pub extern "C" fn inline_css_content(pinfo: *mut MorphInfo , req_mapper : Map) -> u8 {
 
     std::env::set_var("RUST_BACKTRACE", "full");
     let info = unsafe { &mut *pinfo };
 
     let uri = c_string_to_str(info.uri).unwrap();
-
-
 
     let html = match c_string_to_str(info.content) {
         Ok(s)  => s,
@@ -174,8 +188,10 @@ pub extern "C" fn morph_html_from_content(pinfo: *mut MorphInfo , req_mapper : M
     let document    = dom::parse_html(html);
 
     // Vector of objects found in the html.
-    let mut objects = dom::parse_objects_from_content( &document, req_mapper , info.alias );
-    0
+    dom::parse_css_and_inline( &document, req_mapper);
+
+    let content = dom::serialize_html(&document);
+    return content_to_c(content, info);
 }
 
 /// It samples a new page using probabilistic morphing, changes the

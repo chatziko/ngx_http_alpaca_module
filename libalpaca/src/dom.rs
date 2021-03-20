@@ -7,6 +7,8 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::{ str, fs, path::Path };
 use std::ffi::CStr;
+use std::ffi::{CString};
+
 
 
 /// Defines our basic object types, each of which has a corresponding
@@ -193,6 +195,48 @@ pub fn parse_target_size(query: &str) -> usize {
 }
 
 /// Parses the objects contained in an HTML page.
+pub fn parse_css_names(document: &NodeRef) -> Vec<String> {
+
+    // Objects vector
+	let mut objects: Vec<String> = Vec::new();
+	let mut found_favicon        = false;
+
+    for node_data in document.select("link").unwrap() {
+
+        let node = node_data.as_node();
+		let name = node_data.name.local.to_lowercase();
+
+
+		let path_attr = if name == "link" { "href" } else { "src" };
+		let path      = match node_get_attribute(node, path_attr) {
+			Some(p) if p != "" && !p.starts_with("data:") => p       ,
+			_                                             => continue,
+		};
+
+		println!("PATH {}",path);
+
+		let temp = format!( "/{}", path.as_str());
+
+		objects.push(temp);
+
+		let rel  = node_get_attribute(node, "rel").unwrap_or_default();
+		match ( name.as_str(), rel.as_str() ) {
+			("link", "stylesheet")                       => ObjectKind::CSS                          ,
+			("link", "shortcut icon") | ("link", "icon") => { found_favicon = true; ObjectKind::IMG },
+			_                                            => continue                                 ,
+		};
+	}
+
+	// If no favicon was found, insert an empty one
+	if !found_favicon {
+		insert_empty_favicon(document);
+	}
+
+    // objects.sort_unstable_by( |a, b| b.content.len().cmp( &a.content.len() ) ); // larger first
+	objects
+}
+
+/// Parses the objects contained in an HTML page.
 pub fn parse_object_names(document: &NodeRef) -> Vec<String> {
 
     // Objects vector
@@ -226,6 +270,20 @@ pub fn parse_object_names(document: &NodeRef) -> Vec<String> {
 			_                                            => continue                                 ,
 		};
 	}
+	for node_data in document.select("style").unwrap() {
+
+		let last_child   = node_data .as_node().last_child().unwrap();
+		let refc         = last_child.into_text_ref().unwrap();
+
+        let refc_val     = refc.borrow();
+		let mut images_paths = css_parse_all_images(&refc_val);
+
+		for img in images_paths.iter_mut() {
+			*img = format!("/{}",img);
+		}
+
+		objects.append( &mut images_paths);
+	}
 
 	// If no favicon was found, insert an empty one
 	if !found_favicon {
@@ -238,26 +296,26 @@ pub fn parse_object_names(document: &NodeRef) -> Vec<String> {
 
 pub fn get_map_element(req_mapper : Map , uri : String) -> String {
 
-	let c_uri: *mut libc::c_char = uri.as_ptr() as *mut libc::c_char;
-	println!("{}",uri);
-    let temp = unsafe { map_get(req_mapper, c_uri) } as *mut libc::c_char;
+	println!("URI {}",uri);
+
+	let c_uri = CString::new(uri).expect("CString::new Failed");
+
+	// let c_uri: *mut libc::c_char = uri.as_ptr() as *mut libc::c_char;
+    let temp = unsafe { map_get(req_mapper, c_uri.as_ptr()) } as *mut libc::c_char;
     let temp = unsafe { CStr::from_ptr(temp) };
     let str_slice: &str = temp.to_str().unwrap();
-    println!("{}",str_slice);
-
 	str_slice.to_owned()
 }
 
 
 
-pub fn parse_objects_from_content(document: &NodeRef, req_mapper : Map , alias: usize) -> () {
+pub fn parse_css_and_inline(document: &NodeRef, req_mapper : Map) -> () {
 
-	let mut objects: Vec<Object> = Vec::with_capacity(10);
-	let mut found_favicon        = false;
-
-	for node_data in document.select("link").unwrap() {
+	for node_data in document.select("link").unwrap(){
 		let node      = node_data.as_node();
 		let path_attr = "href";
+
+		println!("INSIDE");
 
         let path = match node_get_attribute(node, path_attr) {
 			Some(p) if p != "" && !p.starts_with("data:") => p       ,
@@ -268,23 +326,39 @@ pub fn parse_objects_from_content(document: &NodeRef, req_mapper : Map , alias: 
 			continue;
 		}
 
-		// let temp = format!( "{}/{}" , root , path.as_str() );
-		// let res  = match copy_file_to_string(&temp) {
-		// 	Ok(res)  => res,
-        // 	Err(_)   => continue,
-		// };
-
-
 		let res = get_map_element(req_mapper, format!("/{}",path) );
 
-		// println!("{}" , res);
+		println!("{}", res);
 
 		let par = node.parent().unwrap();
-
-        par .append(create_css_node(&res));
-        node.detach();
+		let new_node = create_css_node(&res);
+		par.append(new_node);
+		println!("");
 	}
 
+	let mut all_removed = false;
+	while !all_removed {
+		let mut removed = false;
+		for node_data in document.select("link").unwrap() {
+			let node = node_data.as_node();
+			let path_attr = "href";
+
+			let path = match node_get_attribute(node, path_attr) {
+				Some(p) if p != "" && !p.starts_with("data:") => p       ,
+				_                                             => continue,
+			};
+
+			if path.contains("favicon.ico") {
+				continue;
+			}
+			node.detach();
+			removed = true;
+		}
+
+		if !removed {
+			all_removed = true;
+		}
+	}
 }
 
 
@@ -299,6 +373,7 @@ pub fn parse_objects(document: &NodeRef, root: &str, uri: &str, alias: usize) ->
 	// - <img> and <link href="favicon.ico" rel="shortcut icon">
 	// - <link rel="stylesheet">
 	// - <script src="...">
+
 
 	for node_data in document.select("link").unwrap() {
 
