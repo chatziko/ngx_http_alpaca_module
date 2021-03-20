@@ -1,0 +1,21 @@
+[package]
+name = "alpaca"
+version = "0.1.1"
+authors = [
+  "Giovanni Cherubin <g.chers@gmail.com>",
+  "Noah Vesely <fowlslegs@riseup.net>",
+  "Panagiotis Kokkinakos <pan.kokkinakos@gmail.com>",
+]
+
+[lib]
+name = "alpaca"
+crate-type = ["staticlib", "cdylib"]
+
+[dependencies]
+rand = "0.7"
+rand_distr = "0.2.1"
+html5ever = "0.25.1"
+kuchiki = "0.8.0"
+
+[profile.dev]     # for cargo build (without --release)
+debug = true      # include debug symbols
