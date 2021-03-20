@@ -113,7 +113,6 @@ pub fn css_parse_all_images(css_text: &str) -> Vec<String>{
 		for item in spl_val {
 
 			let mut new_it = remove_whitespace(&item);
-			// println!("{}", new_it);
 
 			if new_it.contains("url") {
 
@@ -126,7 +125,9 @@ pub fn css_parse_all_images(css_text: &str) -> Vec<String>{
 					// println!("{}" , it);
 					if found == true {
 						let path = it.replace("\"", "").replace("(", "").replace(")", "").replace(")", "").replace(";", "");
-						images_paths.push(path);
+						if !path.contains("*/") {
+							images_paths.push(path);
+						}
 						break;
 					}
 					found = true;
@@ -315,7 +316,7 @@ pub fn get_map_element(req_mapper : Map , uri : String) -> Vec<u8> {
 
 	for i in 0..temp_old.length {
 		element_data.push(unsafe{ *(temp_old.content.add(i as usize))  as u8});
-		print!("{}" , unsafe{ *(temp_old.content.add(i as usize))  as u8 as char});
+		// print!("{}" , unsafe{ *(temp_old.content.add(i as usize))  as u8 as char});
 	}
 
 	// println!("{}" , unsafe{*temp_old.content as u8 as char}  );
@@ -391,7 +392,7 @@ pub fn parse_css_and_inline(document: &NodeRef, req_mapper : Map) -> () {
 	}
 }
 
-pub fn parse_html_objects_from_content(document: &NodeRef, req_mapper : Map) -> () {
+pub fn parse_html_objects_from_content(document: &NodeRef, req_mapper : Map) -> Vec<Object> {
 	let mut objects: Vec<Object> = Vec::with_capacity(10);
 	let mut found_favicon        = false;
 
@@ -423,23 +424,51 @@ pub fn parse_html_objects_from_content(document: &NodeRef, req_mapper : Map) -> 
 
 		let res = get_map_element(req_mapper,relative);
 
-		let vec_of_chars: Vec<char> = res.iter().map(|byte| *byte as char).collect();
-		println!("vec_of_chars: {:?}", vec_of_chars);
+		// let mut pos = 0;
+    	// let mut buffer = File::create("f.gif").unwrap();
 
-		println!("DONE");
-
-		// let fullpath;
-
-		// match uri_to_abs_fs_path(root, relative, uri, alias) {
-		// 	Some(absolute) => fullpath = absolute,
-		// 	None           => continue
+		// while pos < res.len() {
+		// 	let bytes_written = buffer.write(&res[pos..]).unwrap();
+		// 	pos += bytes_written;
 		// }
 
-		// match aux::stringify_error( fs::read(&fullpath) ) {
-		// 	Ok(data) => objects.push( Object::existing(&data, kind, path, node) ),
-		// 	Err(e)   => { eprint!("libalpaca: cannot read {} ({})\n", fullpath, e); continue },
-		// }
+		// let vec_of_chars: Vec<char> = res.iter().map(|byte| *byte as char).collect();
+		// println!("vec_of_chars: {:?}", vec_of_chars);
+
+
+		objects.push( Object::existing(&res, kind, path, node) );
 	}
+
+	for node_data in document.select("style").unwrap() {
+
+		let node         = node_data .as_node();
+		let last_child   = node_data .as_node().last_child().unwrap();
+		let refc         = last_child.into_text_ref().unwrap();
+
+        let refc_val     = refc.borrow();
+		let images_paths = css_parse_all_images(&refc_val);
+
+		for path in images_paths {
+
+			// println!("{}",path);
+
+			let kind = ObjectKind::CSS;
+
+			let split: Vec<&str> = path.split('?').collect();
+			let relative         = format!("/{}",split[0]);
+
+			let res = get_map_element(req_mapper,relative);
+
+			objects.push( Object::existing(&res, kind, path, node) );
+		}
+	}
+
+	if !found_favicon {
+		insert_empty_favicon(document);
+	}
+
+    objects.sort_unstable_by( |a, b| b.content.len().cmp( &a.content.len() ) ); // larger first
+	objects
 }
 
 

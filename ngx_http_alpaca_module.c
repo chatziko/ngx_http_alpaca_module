@@ -494,6 +494,10 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 
             objects = get_required_css_files(main_info, &subreq_tbd);
 
+            if (subreq_tbd == 0){
+                objects = get_html_required_files(main_info, &subreq_tbd);
+            }
+
             printf("Required files\n");
             for (int i = 0 ; i < subreq_tbd ; i++) {
                 printf( "%s %ld\n",objects[i] , strlen( (const char *)objects[i] ) );
@@ -798,41 +802,38 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
                 //             * allocated in rust using the custom "free memory" funtion. */
                         // response = ngx_pcalloc( r->pool, main_info->size * sizeof(u_char) );
 
-					morph_html_from_content(main_info , req_mapper);
 
-                //         free_memory(main_info->content, main_info->size);
+					if ( morph_html_from_content(main_info , req_mapper) ) {
 
-                //         ctx->size = main_info->size;
+						/* Copy the morphed html and free the memory that was
+							* allocated in rust using the custom "free memory" funtion. */
+						response = ngx_pcalloc( r->pool, main_info->size * sizeof(u_char) );
 
-                //     } else {
+						ngx_memcpy(response, main_info->content, main_info->size);
+						ngx_pfree (r->pool, ctx->response);
 
-                //         // Alpaca failed. This might happen if the content was not
-                //         // really html, eg it was proxied from some upstream server
-                //         // that returned gziped content. We log this and return the
-                //         // original content.
+						free_memory(main_info->content, main_info->size);
 
-                //         ngx_log_error( NGX_LOG_ERR                                            ,
-                //                         r->connection->log                                     ,
-                //                         0                                                      ,
-                //                         "[Alpaca filter]: could not process html content. If "
-                //                         "you use proxy_pass, set proxy_set_header "
-                //                         "Accept-Encoding \"\" so that the upstream server "
-                //                         "returns raw html, "
-                //                         );
+						ctx->size = main_info->size;
 
-                //         response = init_response;
-                //     }
+					} else {
 
-					// 	// Alpaca failed. This might happen if the content was not
-					// 	// really html, eg it was proxied from some upstream server
-					// 	// that returned gziped content. We log this and return the
-					// 	// original content.
+						// Alpaca failed. This might happen if the content was not
+						// really html, eg it was proxied from some upstream server
+						// that returned gziped content. We log this and return the
+						// original content.
 
-                    // b = ngx_calloc_buf(r->pool);
+						ngx_log_error( NGX_LOG_ERR                                            ,
+										r->connection->log                                     ,
+										0                                                      ,
+										"[Alpaca filter]: could not process html content. If "
+										"you use proxy_pass, set proxy_set_header "
+										"Accept-Encoding \"\" so that the upstream server "
+										"returns raw html, "
+										);
 
-                    // if (b == NULL) {
-                    //     return NGX_ERROR;
-                    // }
+						response = init_response;
+					}
 
                     // b->pos  = response;
                     // b->last = b->pos + main_info->size;
