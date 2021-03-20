@@ -3,7 +3,7 @@ use aux::stringify_error;
 use base64;
 use deterministic::*;
 use distribution::{ Dist, sample_ge, sample_pair_ge, sample_ge_many };
-use dom::{ Object, ObjectKind, node_get_attribute };
+use dom::{ Object, ObjectKind, node_get_attribute , Map};
 use dom;
 use kuchiki::NodeRef;
 use pad::{ get_html_padding, get_object_padding };
@@ -53,37 +53,6 @@ pub struct MorphInfo {
 }
 
 
-#[repr(C)]
-pub struct cell {
-    pub next: *mut cell,
-    pub value: *mut libc::c_void,
-    pub key: *mut libc::c_char,
-}
-
-#[repr(C)]
-pub struct map {
-    pub elems: *mut *mut cell,
-    pub capacity: libc::c_int,
-    pub size: libc::c_int,
-}
-
-#[link(name = "map", kind = "static")]
-
-// extern "C" {
-
-//     fn map_get(m : map, key : *const c_char) -> *mut c_void;
-// }
-
-extern "C" {
-    fn map_get(m: map, key: *const libc::c_char) -> *mut libc::c_void;
-    fn map_create() -> map;
-}
-
-// #[link(name = "badmath", kind = "static")]
-
-// extern "C" {
-//     fn bad_add(v1:f32 , v2:f32) -> f32;
-// }
 
 fn keep_local_objects(objects: &mut Vec<Object>) {
     objects.retain( |obj| !obj.uri.contains("http:") && !obj.uri.contains("https:") )
@@ -163,19 +132,49 @@ pub extern "C" fn get_html_required_files(pinfo: *mut MorphInfo , length : *mut 
 
 
 
+// #[no_mangle]
+// pub extern "C" fn morph_html_from_content(pinfo: *mut MorphInfo , req_mapper : Map) -> u8 {
+
+//     let st = String::from("/test.txt");
+//     let c_world: *mut libc::c_char = st.as_ptr() as *mut libc::c_char;
+//     println!("EEYEYEYY!!!!!!!!!!!!!");
+//     let temp = unsafe { map_get(req_mapper, c_world) } as *mut libc::c_char;
+//     let temp = unsafe { CStr::from_ptr(temp) };
+//     println!("EEYEYEYY!!!!!!!!!!!!!");
+
+//     let str_slice: &str = temp.to_str().unwrap();
+//     println!("EEYEYEYY!!!!!!!!!!!!!");
+
+//     println!("{}",str_slice);
+//     println!("EEYEYEYY!!!!!!!!!!!!!");
+
+//     0
+// }
+
+
+
 #[no_mangle]
-pub extern "C" fn morph_html_from_content(pinfo: *mut MorphInfo , req_mapper : map) -> u8 {
+pub extern "C" fn morph_html_from_content(pinfo: *mut MorphInfo , req_mapper : Map) -> u8 {
 
-    unsafe { map_create() };
+    std::env::set_var("RUST_BACKTRACE", "full");
+    let info = unsafe { &mut *pinfo };
 
-    let st = String::from("/q1.gif");
-    let c_world: *mut libc::c_char = st.as_ptr() as *mut libc::c_char;
-    println!("EEYEYEYY!!!!!!!!!!!!!");
-    let temp = unsafe { map_get(req_mapper, c_world) } as *mut libc::c_char;
-    println!("EEYEYEYY");
-    let temp = unsafe { CStr::from_ptr(temp) };
-    let str_slice: &str = temp.to_str().unwrap();
-    println!("{}",str_slice);
+    let uri = c_string_to_str(info.uri).unwrap();
+
+
+
+    let html = match c_string_to_str(info.content) {
+        Ok(s)  => s,
+        Err(e) => {
+            eprint!("libalpaca: cannot read html content of {}: {}\n", uri, e);
+            return 0;       // return NULL pointer if html cannot be converted to a string
+        }
+    };
+
+    let document    = dom::parse_html(html);
+
+    // Vector of objects found in the html.
+    let mut objects = dom::parse_objects_from_content( &document, req_mapper , info.alias );
     0
 }
 

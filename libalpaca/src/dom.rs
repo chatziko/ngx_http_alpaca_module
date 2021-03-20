@@ -6,6 +6,8 @@ use kuchiki::{ parse_html_with_options, NodeRef, ParseOpts };
 use std::fs::File;
 use std::io::prelude::*;
 use std::{ str, fs, path::Path };
+use std::ffi::CStr;
+
 
 /// Defines our basic object types, each of which has a corresponding
 /// unique (distribution, padding type) tuple.
@@ -32,6 +34,30 @@ pub struct Object {
     pub target_size: Option<usize>,
     /// The uri of the object, as mentioned in the html source
     pub uri: String,
+}
+
+#[repr(C)]
+pub struct map {
+    pub elems: *mut *mut cell,
+    pub capacity: libc::c_int,
+    pub size: libc::c_int,
+}
+
+#[repr(C)]
+pub struct cell {
+    pub next: *mut cell,
+    pub value: *mut libc::c_void,
+    pub key: [libc::c_char; 0],
+}
+
+pub type Map = *mut map;
+
+#[link(name = "map", kind = "static")]
+
+extern "C" {
+    fn map_create() -> Map;
+    fn map_set(m: Map, key: *const libc::c_char, value: *mut libc::c_void);
+    fn map_get(m: Map, key: *const libc::c_char) -> *mut libc::c_void;
 }
 
 impl Object {
@@ -208,6 +234,57 @@ pub fn parse_object_names(document: &NodeRef) -> Vec<String> {
 
     // objects.sort_unstable_by( |a, b| b.content.len().cmp( &a.content.len() ) ); // larger first
 	objects
+}
+
+pub fn get_map_element(req_mapper : Map , uri : String) -> String {
+
+	let c_uri: *mut libc::c_char = uri.as_ptr() as *mut libc::c_char;
+	println!("{}",uri);
+    let temp = unsafe { map_get(req_mapper, c_uri) } as *mut libc::c_char;
+    let temp = unsafe { CStr::from_ptr(temp) };
+    let str_slice: &str = temp.to_str().unwrap();
+    println!("{}",str_slice);
+
+	str_slice.to_owned()
+}
+
+
+
+pub fn parse_objects_from_content(document: &NodeRef, req_mapper : Map , alias: usize) -> () {
+
+	let mut objects: Vec<Object> = Vec::with_capacity(10);
+	let mut found_favicon        = false;
+
+	for node_data in document.select("link").unwrap() {
+		let node      = node_data.as_node();
+		let path_attr = "href";
+
+        let path = match node_get_attribute(node, path_attr) {
+			Some(p) if p != "" && !p.starts_with("data:") => p       ,
+			_                                             => continue,
+		};
+
+		if path.contains("favicon.ico") {
+			continue;
+		}
+
+		// let temp = format!( "{}/{}" , root , path.as_str() );
+		// let res  = match copy_file_to_string(&temp) {
+		// 	Ok(res)  => res,
+        // 	Err(_)   => continue,
+		// };
+
+
+		let res = get_map_element(req_mapper, format!("/{}",path) );
+
+		// println!("{}" , res);
+
+		let par = node.parent().unwrap();
+
+        par .append(create_css_node(&res));
+        node.detach();
+	}
+
 }
 
 

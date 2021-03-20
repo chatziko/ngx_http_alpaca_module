@@ -353,6 +353,8 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 
 	static map req_mapper = NULL;
 	static struct MorphInfo* main_info = NULL;
+	static int subreq_count = 0;
+	static int subreq_tbd = 0;
 
 	// Call the next filter if neither of the ALPaCA versions have been
 	// activated But always serve the fake image, even if the configuration does
@@ -443,6 +445,8 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
      * captured and morph it according to ALPaCA                      */
 	if ( is_html(r) && r->headers_out.status != 404 && r == r->main) {
 
+		printf("FIRST REQUEST\n");
+
         /* Iterate through every buffer of the current chain and
          * find its content size                                 */
 
@@ -455,7 +459,6 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 			}
 
 			int rc = NGX_OK;
-			int length = -1;
 			u_char** objects = NULL;
 			ngx_http_request_t *sr = NULL;
 
@@ -481,10 +484,10 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 			main_info->max_obj_size         = plcf->max_obj_size,
 			main_info->obj_inlining_enabled = plcf->obj_inlining_enabled,
 
-			objects = get_html_required_files(main_info , &length);
+			objects = get_html_required_files(main_info , &subreq_tbd);
 
 			printf("Required files\n");
-			for (int i = 0 ; i < length ; i++){
+			for (int i = 0 ; i < subreq_tbd ; i++){
 				printf("%s %lu\n",objects[i] , (unsigned long)strlen((const char *)objects[i]));
 			}
 
@@ -496,24 +499,26 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 				}
 			}
 
-			for (int i = 0; rc == NGX_OK && i < length ; i++){
+			for (int i = 0; rc == NGX_OK && i < subreq_tbd ; i++){
 				ngx_str_t uri;
-				ngx_str_set(&uri , objects[i]);
+				// ngx_str_set(&uri , objects[i]);
+				(&uri)->len = strlen((const char *)objects[i]);
+				(&uri)->data = (u_char *) objects[i];
+				printf("SUB for %s %ld\n",uri.data , uri.len);
 				ngx_http_subrequest(r, &uri , NULL /* args */, &sr, NULL /* cb */, 0 /* flags */);
 			}
 
-			ngx_str_t uri;
-			char temp[strlen( (char*)r->uri.data ) + 1];
-			strcpy(temp , (char*)r->uri.data);
-			char * token = strtok(temp, " ");
-			strcpy(temp , token);
+			// ngx_str_t uri;
+			// ngx_str_set(&uri , "/test.txt");
+			// ngx_http_subrequest(r, &uri , NULL /* args */, &sr, NULL /* cb */, 0 /* flags */);
 
-			ngx_str_set(&uri , temp);
 
-			if (ngx_http_subrequest(r, &uri , NULL /* args */, &sr, NULL /* cb */, 0 /* flags */) == NGX_ERROR) {
-				printf("NGINX SUB-REQUEST ERROR!\n");
-				return NGX_ERROR;
-			}
+			// char temp[strlen( (char*)r->uri.data ) + 1];
+			// strcpy(temp , (char*)r->uri.data);
+			// char * token = strtok(temp, " ");
+			// strcpy(temp , token);
+
+
 
 			// // Run alpaca
 			// if ( morph_html(&info) ) {
@@ -595,6 +600,18 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 
     } else if (is_paddable(r) && r == r->main) {
 
+		if (subreq_count != subreq_tbd){
+			ngx_log_error( NGX_LOG_ERR                                            ,
+									r->connection->log                                     ,
+									0                                                      ,
+									"[Alpaca filter]: could not process html content. If "
+									"you use proxy_pass, set proxy_set_header "
+									"Accept-Encoding \"\" so that the upstream server "
+									"returns raw html, "
+									);
+			return NGX_ERROR;
+		}
+
 		/* Proceed only if there is an ALPaCA GET parameter. */
 		if (r->args.len == 0)
 			return ngx_http_next_body_filter(r, in);
@@ -656,10 +673,139 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r, ngx_chain_t*
 			return ngx_http_next_body_filter(r, in);
 		}
 		return ngx_http_next_body_filter(r, in);
+	}
+	else if (r != r->main){
 
-    } else if (r != r->main){}
+		// if (is_html(r) && r->headers_out.status != 404){
+		// 	printf("MAIN SUB\n");
 
-    return ngx_http_next_body_filter(r, in);
+		// 	if ((response = get_response(ctx , r , in , true)) != NULL){
+
+		// 		// Run alpaca
+		// 		//Give map to morph_html
+		// 		if ( morph_html_from_content(main_info , req_mapper) ) {
+
+
+		// 			/* Copy the morphed html and free the memory that was
+		// 				* allocated in rust using the custom "free memory" funtion. */
+		// 			response = ngx_pcalloc( r->pool, main_info->size * sizeof(u_char) );
+
+		// 			ngx_memcpy(response, main_info->content, main_info->size);
+		// 			ngx_pfree (r->pool, ctx->response);
+
+		// 			free_memory(main_info->content, main_info->size);
+
+		// 			ctx->size = main_info->size;
+
+		// 		} else {
+
+		// 			// Alpaca failed. This might happen if the content was not
+		// 			// really html, eg it was proxied from some upstream server
+		// 			// that returned gziped content. We log this and return the
+		// 			// original content.
+
+		// 			ngx_log_error( NGX_LOG_ERR                                            ,
+		// 							r->connection->log                                     ,
+		// 							0                                                      ,
+		// 							"[Alpaca filter]: could not process html content. If "
+		// 							"you use proxy_pass, set proxy_set_header "
+		// 							"Accept-Encoding \"\" so that the upstream server "
+		// 							"returns raw html, "
+		// 							);
+
+		// 			response = ctx->response;
+		// 		}
+
+		// 		b = ngx_calloc_buf(r->pool);
+
+		// 		if (b == NULL) {
+		// 			return NGX_ERROR;
+		// 		}
+
+		// 		b->pos  = response;
+		// 		b->last = b->pos + ctx->size;
+
+		// 		b->last_buf      = 1;
+		// 		b->memory        = 1;
+		// 		b->last_in_chain = 1;
+
+		// 		out.buf  = b;
+		// 		out.next = NULL;
+
+		// 		return ngx_http_next_body_filter(r, &out);
+		// 	}
+		// }
+		printf("IMAGE SUB\n");
+
+		if ((response = get_response(ctx , r , in , false)) != NULL){
+			subreq_count++;
+			printf("%d\n", subreq_count);
+			u_char* new_resp = malloc(ctx->size);
+			memset(new_resp , 0 , ctx->size);
+			memcpy(new_resp , response , ctx->size);
+			map_set(req_mapper , (char *)r->uri.data, new_resp);
+
+			printf("DATA %s\n", new_resp);
+
+			if (subreq_count == subreq_tbd){
+
+				morph_html_from_content(main_info , req_mapper);
+
+				// if ( morph_html_from_content(main_info , req_mapper) ) {
+
+				// 	/* Copy the morphed html and free the memory that was
+				// 		* allocated in rust using the custom "free memory" funtion. */
+				// 	response = ngx_pcalloc( r->pool, main_info->size * sizeof(u_char) );
+
+				// 	ngx_memcpy(response, main_info->content, main_info->size);
+				// 	ngx_pfree (r->pool, ctx->response);
+
+				// 	free_memory(main_info->content, main_info->size);
+
+				// 	ctx->size = main_info->size;
+
+				// } else {
+
+				// 	// Alpaca failed. This might happen if the content was not
+				// 	// really html, eg it was proxied from some upstream server
+				// 	// that returned gziped content. We log this and return the
+				// 	// original content.
+
+				// 	ngx_log_error( NGX_LOG_ERR                                            ,
+				// 					r->connection->log                                     ,
+				// 					0                                                      ,
+				// 					"[Alpaca filter]: could not process html content. If "
+				// 					"you use proxy_pass, set proxy_set_header "
+				// 					"Accept-Encoding \"\" so that the upstream server "
+				// 					"returns raw html, "
+				// 					);
+
+				// 	response = ctx->response;
+				// }
+
+
+				b = ngx_calloc_buf(r->pool);
+
+				if (b == NULL) {
+					return NGX_ERROR;
+				}
+
+				b->pos  = main_info->content;
+				b->last = b->pos + main_info->size;
+
+				b->last_buf      = 1;
+				b->memory        = 1;
+				b->last_in_chain = 1;
+
+				out.buf  = b;
+				out.next = NULL;
+
+				return ngx_http_next_body_filter(r, &out);
+
+			}
+		}
+	}
+	return ngx_http_next_body_filter(r, in);
 }
 
 static void* ngx_http_alpaca_create_loc_conf(ngx_conf_t* cf) {

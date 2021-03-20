@@ -1,14 +1,10 @@
-// extern crate cmake;
-extern crate cc;
+extern crate cmake;
+
+use cmake::Config;
 
 fn main(){
-    cc::Build::new()
-                .file("src/libmap/map.c")
-                .include("src")
-                .compile("libmap.a");
+    let dst = Config::new("../utils/map").build();
 
-    // let dst = Config::new("libmap").build();
-
-    // println!("cargo:rustc-link-search=native={}",dst.display());
-    // println!("cargo:rustc-link-lib=static=map");
+    println!("cargo:rustc-link-search=native={}",dst.display());
+    println!("cargo:rustc-link-lib=static=map");
 }

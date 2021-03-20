@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <stdio.h>
 
 struct cell {
   struct cell *next;
@@ -21,13 +22,13 @@ static void extend_if_necessary(map m);
 
 /**
  * Create a new, empty map.
- * 
+ *
  * The returned map has dynamically allocated memory associated with it, and
  * this memory must be reclaimed after use with `map_destroy`.
  */
 map map_create() {
 
-  // Allocate space for the map's primary data structure. More space will be 
+  // Allocate space for the map's primary data structure. More space will be
   // allocated in the future when values are added to the map.
   map m = malloc(sizeof (map));
   assert(m != NULL);
@@ -43,7 +44,7 @@ map map_create() {
 
 /**
  * Free the memory used for a map after use.
- * 
+ *
  * Note that this routine does not free any memory that was allocated for the
  * values stored in the map. That memory must be freed by the client as
  * appropriate.
@@ -73,7 +74,7 @@ int map_size(const map m) {
 
 /**
  * Determine whether a map contains a given key.
- * 
+ *
  * Keys are case-sensitive.
  */
 bool map_contains(const map m, const char *key) {
@@ -88,7 +89,7 @@ bool map_contains(const map m, const char *key) {
 
 /**
  * Set the value for a given key within a map.
- * 
+ *
  * This will add a new key if it does not exist. If the key already exists, the
  * new value will replace the old one.
  */
@@ -119,7 +120,7 @@ void map_set(map m, const char *key, void *value) {
 
 /**
  * Retrieve the value for a given key in a map.
- * 
+ *
  * Crashes if the map does not contain the given key.
  */
 void *map_get(const map m, const char *key) {
@@ -127,7 +128,10 @@ void *map_get(const map m, const char *key) {
 
   // Search linearly for a matching key through the appropriate linked list.
   for (struct cell *curr = m->elems[b]; curr != NULL; curr = curr->next) {
-    if (strcmp(curr->key, key) == 0) return curr->value;
+    if (strcmp(curr->key, key) == 0){
+      printf("KEY FOUND %s\n", (char *)curr->value);
+      return curr->value;
+    }
   }
 
   // Key not found.
@@ -138,7 +142,7 @@ void *map_get(const map m, const char *key) {
 
 /**
  * Remove a key and its value from a map.
- * 
+ *
  * Crashes if the map does not already contain the key.
  */
 void *map_remove(map m, const char *key) {
@@ -184,7 +188,7 @@ const char *map_first(map m) {
 
 /**
  * Get the next key after a given key within a map.
- * 
+ *
  * Used for iteration. Returns NULL if there are no more keys. Note that the
  * provided `key` must have been returned from a previous call to `map_first`
  * or `map_next`. Passing other strings produces undefined behavior.
@@ -204,7 +208,7 @@ const char *map_next(map m, const char *key) {
       return m->elems[i]->key;
     }
   }
-  
+
   // No more keys.
   return NULL;
 }
@@ -223,7 +227,7 @@ static unsigned int hash(const char *key) {
 }
 
 /*
- * Grow the capacity of the hash map by a factor of two, only when the map's 
+ * Grow the capacity of the hash map by a factor of two, only when the map's
  * load becomes greater than one.
  */
 static void extend_if_necessary(map m) {
@@ -233,7 +237,7 @@ static void extend_if_necessary(map m) {
     int capacity = m->capacity;
     struct cell **elems = m->elems;
 
-    // Doubling the capacity when necessary allows for an amortized constant 
+    // Doubling the capacity when necessary allows for an amortized constant
     // runtime for extension.
     m->capacity *= 2;
     m->elems = calloc(m->capacity, sizeof (struct cell *));
